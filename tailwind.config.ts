@@ -1,6 +1,5 @@
 import type { Config } from "tailwindcss";
 
-// TODO: fonts (Space Grotesk, IBM Plex Mono) still need to be wired up via next/font.
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
@@ -13,8 +12,8 @@ const config: Config = {
         "text-dim": "#8FA0A3",
       },
       fontFamily: {
-        sans: ["Space Grotesk", "sans-serif"],
-        mono: ["IBM Plex Mono", "monospace"],
+        sans: ["var(--font-space-grotesk)", "sans-serif"],
+        mono: ["var(--font-ibm-plex-mono)", "monospace"],
       },
     },
   },

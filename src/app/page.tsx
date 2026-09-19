@@ -1,8 +1,9 @@
-// TODO: landing page — assemble Hero + LiquidGlassButton.
+import { Hero } from "@/components/landing/Hero";
+
 export default function HomePage() {
   return (
-    <main>
-      <h1>VYTAL</h1>
+    <main className="min-h-screen">
+      <Hero />
     </main>
   );
 }
