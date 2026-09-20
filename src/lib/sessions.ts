@@ -1,0 +1,146 @@
+import { getSupabaseClient } from "@/lib/supabase";
+
+export interface ScorePoint {
+  elapsedSeconds: number;
+  score: number;
+}
+
+export interface SessionSummary {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number | null;
+  avgPostureScore: number | null;
+  avgHydrationScore: number | null;
+}
+
+export interface SessionDetail {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number | null;
+  postureData: ScorePoint[];
+  hydrationData: ScorePoint[];
+}
+
+function average(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+function computeDurationSeconds(
+  startedAt: string,
+  endedAt: string | null
+): number | null {
+  if (!endedAt) return null;
+  const seconds = (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000;
+  return Math.max(0, Math.round(seconds));
+}
+
+function groupScoresBySession(
+  rows: { session_id: string; score: number }[]
+): Map<string, number[]> {
+  const bySession = new Map<string, number[]>();
+  for (const row of rows) {
+    const scores = bySession.get(row.session_id) ?? [];
+    scores.push(row.score);
+    bySession.set(row.session_id, scores);
+  }
+  return bySession;
+}
+
+// TODO: filter by the authenticated user once auth exists — this currently
+// lists every session in the table.
+export async function getSessions(): Promise<SessionSummary[]> {
+  const supabase = getSupabaseClient();
+  const { data: sessions, error } = await supabase
+    .from("sessions")
+    .select("id, started_at, ended_at")
+    .order("started_at", { ascending: false });
+
+  if (error) throw error;
+  if (!sessions || sessions.length === 0) return [];
+
+  const sessionIds = sessions.map((session) => session.id);
+
+  const [{ data: postureReadings, error: postureError }, { data: hydrationReadings, error: hydrationError }] =
+    await Promise.all([
+      supabase.from("posture_readings").select("session_id, score").in("session_id", sessionIds),
+      supabase.from("hydration_readings").select("session_id, score").in("session_id", sessionIds),
+    ]);
+
+  if (postureError) throw postureError;
+  if (hydrationError) throw hydrationError;
+
+  const postureBySession = groupScoresBySession(postureReadings ?? []);
+  const hydrationBySession = groupScoresBySession(hydrationReadings ?? []);
+
+  return sessions.map((session) => ({
+    id: session.id,
+    startedAt: session.started_at,
+    endedAt: session.ended_at,
+    durationSeconds: computeDurationSeconds(session.started_at, session.ended_at),
+    avgPostureScore: average(postureBySession.get(session.id) ?? []),
+    avgHydrationScore: average(hydrationBySession.get(session.id) ?? []),
+  }));
+}
+
+export async function getSessionDetail(id: string): Promise<SessionDetail | null> {
+  const supabase = getSupabaseClient();
+  const { data: session, error } = await supabase
+    .from("sessions")
+    .select("id, started_at, ended_at")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!session) return null;
+
+  const startedAtMs = new Date(session.started_at).getTime();
+
+  const [{ data: postureReadings, error: postureError }, { data: hydrationReadings, error: hydrationError }] =
+    await Promise.all([
+      supabase
+        .from("posture_readings")
+        .select("timestamp, score")
+        .eq("session_id", id)
+        .order("timestamp", { ascending: true }),
+      supabase
+        .from("hydration_readings")
+        .select("timestamp, score")
+        .eq("session_id", id)
+        .order("timestamp", { ascending: true }),
+    ]);
+
+  if (postureError) throw postureError;
+  if (hydrationError) throw hydrationError;
+
+  const toScorePoints = (rows: { timestamp: string; score: number }[]): ScorePoint[] =>
+    rows.map((row) => ({
+      elapsedSeconds: (new Date(row.timestamp).getTime() - startedAtMs) / 1000,
+      score: row.score,
+    }));
+
+  return {
+    id: session.id,
+    startedAt: session.started_at,
+    endedAt: session.ended_at,
+    durationSeconds: computeDurationSeconds(session.started_at, session.ended_at),
+    postureData: toScorePoints(postureReadings ?? []),
+    hydrationData: toScorePoints(hydrationReadings ?? []),
+  };
+}
+
+export function formatSessionDate(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+export function formatSessionDuration(seconds: number | null): string {
+  if (seconds === null) return "In progress";
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}m ${remainingSeconds}s`;
+}
