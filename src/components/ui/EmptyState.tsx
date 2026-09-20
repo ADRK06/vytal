@@ -1,4 +1,12 @@
-// TODO: shared "no data yet" / "sensor disconnected" placeholder.
-export function EmptyState({ message }: { message?: string }) {
-  return <div>{message ?? "No data yet."}</div>;
+interface EmptyStateProps {
+  message?: string;
+  className?: string;
+}
+
+export function EmptyState({ message, className = "" }: EmptyStateProps) {
+  return (
+    <div className={`text-sm text-text-dim ${className}`}>
+      {message ?? "No data yet."}
+    </div>
+  );
 }
