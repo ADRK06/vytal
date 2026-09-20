@@ -5,7 +5,11 @@ import {
   extractPostureLandmarks,
   getPoseLandmarker,
 } from "@/lib/posture/mediapipe";
-import { getStoredPostureBaseline, scorePosture } from "@/lib/scoring";
+import {
+  computeAngleDeviation,
+  getStoredPostureBaseline,
+  scoreFromDeviation,
+} from "@/lib/scoring";
 
 export type PostureStatus =
   | "requesting"
@@ -15,6 +19,11 @@ export type PostureStatus =
   | "error";
 
 const SAMPLE_INTERVAL_MS = 1000;
+
+// Rolling window of raw angle deviations, averaged before scoring, so one
+// jittery frame (or one skipped low-visibility frame) doesn't show up as a
+// visible jump in the displayed score.
+const SMOOTHING_WINDOW = 4;
 
 export function usePostureScore() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -26,6 +35,7 @@ export function usePostureScore() {
   useEffect(() => {
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | undefined;
+    const deviationWindow: number[] = [];
 
     async function start() {
       setStatus("requesting");
@@ -80,9 +90,19 @@ export function usePostureScore() {
 
         const result = landmarker.detectForVideo(currentVideo, performance.now());
         const landmarks = extractPostureLandmarks(result);
+        // extractPostureLandmarks already drops frames where a required
+        // landmark's visibility is too low — skip this tick entirely
+        // rather than smoothing in an unreliable reading.
         if (!landmarks) return;
 
-        setScore(scorePosture(landmarks, baseline));
+        deviationWindow.push(computeAngleDeviation(landmarks, baseline));
+        if (deviationWindow.length > SMOOTHING_WINDOW) deviationWindow.shift();
+
+        const smoothedDeviation =
+          deviationWindow.reduce((sum, value) => sum + value, 0) /
+          deviationWindow.length;
+
+        setScore(scoreFromDeviation(smoothedDeviation));
         setStatus("live");
       }, SAMPLE_INTERVAL_MS);
     }

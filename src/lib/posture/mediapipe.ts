@@ -28,6 +28,11 @@ const LANDMARK_INDEX = {
   rightHip: 24,
 } as const;
 
+// Below this, MediaPipe itself isn't confident the landmark is actually
+// visible (occluded, out of frame, etc.) — treat the whole sample as
+// unreliable rather than scoring off a guessed position.
+const MIN_VISIBILITY = 0.5;
+
 const WASM_BASE_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
 const MODEL_ASSET_URL =
@@ -72,7 +77,8 @@ export function extractPostureLandmarks(
 
   const at = (index: number): Point2D | null => {
     const point = points[index];
-    return point ? { x: point.x, y: point.y } : null;
+    if (!point || point.visibility < MIN_VISIBILITY) return null;
+    return { x: point.x, y: point.y };
   };
 
   const leftShoulder = at(LANDMARK_INDEX.leftShoulder);

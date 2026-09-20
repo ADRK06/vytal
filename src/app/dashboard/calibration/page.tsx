@@ -18,6 +18,9 @@ import { createMockHydrationSource } from "@/lib/mock/hydrationMock";
 const GET_READY_SECONDS = 3;
 const POSTURE_HOLD_SECONDS = 4;
 const HYDRATION_HOLD_SECONDS = 10;
+// Sampled independently of the 1s countdown tick so the averaged baseline
+// is built from many more readings than just one per displayed second.
+const POSTURE_CAPTURE_SAMPLE_INTERVAL_MS = 400;
 
 const RETRY_BUTTON_CLASSES =
   "rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 font-mono text-xs uppercase tracking-wide text-text transition-colors hover:bg-white/[0.12]";
@@ -38,7 +41,8 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
   useEffect(() => {
     let cancelled = false;
     let stream: MediaStream | null = null;
-    let tickInterval: ReturnType<typeof setInterval> | undefined;
+    let countdownInterval: ReturnType<typeof setInterval> | undefined;
+    let sampleInterval: ReturnType<typeof setInterval> | undefined;
 
     async function start() {
       setStatus("requesting");
@@ -79,8 +83,10 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
       if (cancelled) return;
 
       // Phase 1: "get ready" countdown, no capture yet. Phase 2: hold still
-      // while we sample the neck-torso angle once per second and average
-      // it, so one noisy frame can't skew the whole baseline.
+      // while we sample the neck-torso angle several times a second and
+      // average all of it into the baseline — many more readings than a
+      // single instant snapshot, so one noisy frame (or a low-visibility
+      // frame, which extractPostureLandmarks already skips) can't skew it.
       let phase: "get-ready" | "hold" = "get-ready";
       let remaining = GET_READY_SECONDS;
       const samples: number[] = [];
@@ -88,16 +94,35 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
       setStatus("get-ready");
       setSecondsLeft(remaining);
 
-      tickInterval = setInterval(() => {
-        if (phase === "hold") {
-          const currentVideo = videoRef.current;
-          if (currentVideo && currentVideo.readyState >= 2) {
-            const result = landmarker.detectForVideo(currentVideo, performance.now());
-            const landmarks = extractPostureLandmarks(result);
-            if (landmarks) samples.push(computeNeckTorsoAngle(landmarks));
-          }
+      function finishCapture() {
+        if (countdownInterval) clearInterval(countdownInterval);
+        if (sampleInterval) clearInterval(sampleInterval);
+
+        const averaged =
+          samples.length > 0
+            ? samples.reduce((sum, value) => sum + value, 0) / samples.length
+            : null;
+
+        if (averaged === null) {
+          if (!cancelled) setStatus("error");
+          return;
         }
 
+        storePostureBaseline({ neckTorsoAngle: averaged });
+        if (!cancelled) onComplete();
+      }
+
+      sampleInterval = setInterval(() => {
+        if (phase !== "hold") return;
+        const currentVideo = videoRef.current;
+        if (!currentVideo || currentVideo.readyState < 2) return;
+
+        const result = landmarker.detectForVideo(currentVideo, performance.now());
+        const landmarks = extractPostureLandmarks(result);
+        if (landmarks) samples.push(computeNeckTorsoAngle(landmarks));
+      }, POSTURE_CAPTURE_SAMPLE_INTERVAL_MS);
+
+      countdownInterval = setInterval(() => {
         remaining -= 1;
         setSecondsLeft(Math.max(remaining, 0));
 
@@ -110,20 +135,7 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
             return;
           }
 
-          clearInterval(tickInterval);
-
-          const averaged =
-            samples.length > 0
-              ? samples.reduce((sum, value) => sum + value, 0) / samples.length
-              : null;
-
-          if (averaged === null) {
-            if (!cancelled) setStatus("error");
-            return;
-          }
-
-          storePostureBaseline({ neckTorsoAngle: averaged });
-          if (!cancelled) onComplete();
+          finishCapture();
         }
       }, 1000);
     }
@@ -132,7 +144,8 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
 
     return () => {
       cancelled = true;
-      if (tickInterval) clearInterval(tickInterval);
+      if (countdownInterval) clearInterval(countdownInterval);
+      if (sampleInterval) clearInterval(sampleInterval);
       stream?.getTracks().forEach((track) => track.stop());
     };
   }, [attempt, onComplete]);

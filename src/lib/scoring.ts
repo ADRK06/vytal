@@ -55,18 +55,32 @@ export function capturePostureBaseline(
   return { neckTorsoAngle: computeNeckTorsoAngle(landmarks) };
 }
 
+// The neck-torso angle deviation from baseline, normalized into (-180, 180].
+// Exposed separately from scoreFromDeviation so callers that sample
+// repeatedly (usePostureScore) can smooth this raw number over several
+// frames before ever converting it to a score.
+export function computeAngleDeviation(
+  landmarks: PostureLandmarks,
+  baseline: PostureBaseline
+): number {
+  return normalizeAngleDelta(
+    computeNeckTorsoAngle(landmarks) - baseline.neckTorsoAngle
+  );
+}
+
+export function scoreFromDeviation(deviationDegrees: number): number {
+  // Squaring (rather than Math.abs) is what makes this symmetric — a
+  // positive or negative deviation of the same size scores identically —
+  // while also producing the quadratic (flat-then-steep) falloff.
+  const score = 100 - 100 * (deviationDegrees / MAX_DEVIATION_DEGREES) ** 2;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
 export function scorePosture(
   landmarks: PostureLandmarks,
   baseline: PostureBaseline
 ): number {
-  const deviation = normalizeAngleDelta(
-    computeNeckTorsoAngle(landmarks) - baseline.neckTorsoAngle
-  );
-  // Squaring (rather than Math.abs) is what makes this symmetric — a
-  // positive or negative deviation of the same size scores identically —
-  // while also producing the quadratic (flat-then-steep) falloff.
-  const score = 100 - 100 * (deviation / MAX_DEVIATION_DEGREES) ** 2;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  return scoreFromDeviation(computeAngleDeviation(landmarks, baseline));
 }
 
 export function getStoredPostureBaseline(): PostureBaseline | null {
