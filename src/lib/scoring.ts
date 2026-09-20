@@ -7,8 +7,14 @@ export interface PostureBaseline {
 
 const POSTURE_BASELINE_STORAGE_KEY = "vytal:posture-baseline";
 
-// A neck-torso angle this far from baseline (in degrees) scores as 0.
-const MAX_DEVIATION_DEGREES = 30;
+// A neck-torso angle at or beyond this many degrees from baseline scores 0.
+// The falloff is quadratic (see scorePosture), not linear: a straight-line
+// falloff can't fit "barely penalize a few degrees of natural movement" and
+// "a ~10° slouch should feel like a real drop" at the same time — no single
+// divisor gets both a 3° deviation into the 90s and a 10° deviation down to
+// ~40. Squaring the normalized deviation keeps the curve flat near 0 and
+// steep in the middle, matching how a slouch actually feels.
+const MAX_DEVIATION_DEGREES = 13;
 
 function midpoint(a: Point2D, b: Point2D): Point2D {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -53,10 +59,13 @@ export function scorePosture(
   landmarks: PostureLandmarks,
   baseline: PostureBaseline
 ): number {
-  const deviation = Math.abs(
-    normalizeAngleDelta(computeNeckTorsoAngle(landmarks) - baseline.neckTorsoAngle)
+  const deviation = normalizeAngleDelta(
+    computeNeckTorsoAngle(landmarks) - baseline.neckTorsoAngle
   );
-  const score = 100 - (deviation / MAX_DEVIATION_DEGREES) * 100;
+  // Squaring (rather than Math.abs) is what makes this symmetric — a
+  // positive or negative deviation of the same size scores identically —
+  // while also producing the quadratic (flat-then-steep) falloff.
+  const score = 100 - 100 * (deviation / MAX_DEVIATION_DEGREES) ** 2;
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
