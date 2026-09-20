@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
-import { getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseServiceClient } from "@/lib/supabase/service";
 import { scoreHydration } from "@/lib/scoring";
 
 // Accepts { session_id, raw_gsr, raw_ppg, timestamp } from the ESP32 mouse,
 // runs the hydration scoring function, writes to hydration_readings.
 // This is the contract the hardware teammate's firmware depends on — don't
 // change its shape without telling them.
+//
+// Uses the service-role client, not a user-scoped one: the ESP32 has no
+// Supabase Auth session of its own, and Row Level Security (see
+// supabase/migrations/0002_rls.sql) would otherwise block every insert here.
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -85,7 +89,7 @@ export async function POST(request: Request) {
   const score = scoreHydration(raw_gsr);
 
   try {
-    const supabase = getSupabaseClient();
+    const supabase = getSupabaseServiceClient();
     const { data, error } = await supabase
       .from("hydration_readings")
       .insert({ session_id, raw_gsr, raw_ppg, timestamp, score })

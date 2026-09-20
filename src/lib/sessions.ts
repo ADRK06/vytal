@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export interface ScorePoint {
   elapsedSeconds: number;
@@ -49,13 +49,19 @@ function groupScoresBySession(
   return bySession;
 }
 
-// TODO: filter by the authenticated user once auth exists — this currently
-// lists every session in the table.
+// Scoped to the signed-in user: sessions is filtered explicitly by
+// user_id here, and posture_readings/hydration_readings are scoped
+// implicitly by Row Level Security (supabase/migrations/0002_rls.sql),
+// since they only carry session_id, not user_id, directly.
 export async function getSessions(): Promise<SessionSummary[]> {
-  const supabase = getSupabaseClient();
+  const supabase = createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return [];
+
   const { data: sessions, error } = await supabase
     .from("sessions")
     .select("id, started_at, ended_at")
+    .eq("user_id", userData.user.id)
     .order("started_at", { ascending: false });
 
   if (error) throw error;
@@ -86,7 +92,9 @@ export async function getSessions(): Promise<SessionSummary[]> {
 }
 
 export async function getSessionDetail(id: string): Promise<SessionDetail | null> {
-  const supabase = getSupabaseClient();
+  const supabase = createSupabaseServerClient();
+  // RLS scopes this to the signed-in user's own sessions — a valid id
+  // belonging to someone else simply returns no row, same as a bad id.
   const { data: session, error } = await supabase
     .from("sessions")
     .select("id, started_at, ended_at")
