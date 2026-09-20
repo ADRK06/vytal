@@ -83,7 +83,46 @@ export function storePostureBaseline(baseline: PostureBaseline): void {
   }
 }
 
-// TODO: hydration scoring math will get recalibrated as real calibration data comes in.
+export interface HydrationBaseline {
+  /** Average mock reading captured while holding the mouse still during calibration. */
+  restingScore: number;
+}
+
+const HYDRATION_BASELINE_STORAGE_KEY = "vytal:hydration-baseline";
+
+export function captureHydrationBaseline(samples: number[]): HydrationBaseline {
+  const restingScore =
+    samples.length === 0
+      ? 0
+      : Math.round(samples.reduce((sum, value) => sum + value, 0) / samples.length);
+  return { restingScore };
+}
+
+export function getStoredHydrationBaseline(): HydrationBaseline | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(HYDRATION_BASELINE_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as HydrationBaseline) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function storeHydrationBaseline(baseline: HydrationBaseline): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      HYDRATION_BASELINE_STORAGE_KEY,
+      JSON.stringify(baseline)
+    );
+  } catch {
+    // Ignore storage errors (private browsing, quota, etc.) — the session
+    // just won't have a baseline until the user recalibrates.
+  }
+}
+
+// TODO: hydration scoring math will get recalibrated once this baseline is
+// wired into a real GSR/PPG signal from the ESP32 mouse.
 export function scoreHydration(): number {
   return 0;
 }
