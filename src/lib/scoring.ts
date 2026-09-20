@@ -160,8 +160,17 @@ export function storeHydrationBaseline(baseline: HydrationBaseline): void {
   }
 }
 
-// TODO: hydration scoring math will get recalibrated once this baseline is
-// wired into a real GSR/PPG signal from the ESP32 mouse.
-export function scoreHydration(): number {
-  return 0;
+// Placeholder until real calibration data exists from the ESP32 mouse.
+// Maps the raw GSR ADC reading linearly onto 0-100, clamped. The range
+// (ESP32's 12-bit ADC, 0-4095) and the direction (higher raw value ->
+// higher score) are both guesses — this has no physiological basis yet
+// and needs recalibrating once real sensor + baseline data comes in from
+// teammate testing (see HydrationBaseline above for where that'll plug in).
+const RAW_GSR_MIN = 0;
+const RAW_GSR_MAX = 4095;
+
+export function scoreHydration(rawGsr: number): number {
+  const clamped = Math.max(RAW_GSR_MIN, Math.min(RAW_GSR_MAX, rawGsr));
+  const score = ((clamped - RAW_GSR_MIN) / (RAW_GSR_MAX - RAW_GSR_MIN)) * 100;
+  return Math.round(score);
 }
