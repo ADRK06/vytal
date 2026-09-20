@@ -1,7 +1,7 @@
 import type { Point2D, PostureLandmarks } from "./posture/mediapipe";
 
 export interface PostureBaseline {
-  /** Degrees between the shoulder->ear vector and the hip->shoulder vector, captured while sitting upright. */
+  /** Degrees between the shoulder->ear vector and the shoulder line's own perpendicular, captured while sitting upright. */
   neckTorsoAngle: number;
 }
 
@@ -33,18 +33,34 @@ function normalizeAngleDelta(delta: number): number {
   return normalized;
 }
 
+// The perpendicular to the shoulder line that points "up" (toward the top
+// of the frame). There are two perpendiculars to any line; this picks
+// whichever one is closer to straight up, so it doesn't matter which
+// shoulder lands on which side of the image.
+function shoulderUpAngle(leftShoulder: Point2D, rightShoulder: Point2D): number {
+  const shoulderLineAngle = angleBetween(leftShoulder, rightShoulder);
+  const candidateA = normalizeAngleDelta(shoulderLineAngle + 90);
+  const candidateB = normalizeAngleDelta(shoulderLineAngle - 90);
+  const distanceFromUp = (angle: number) => Math.abs(normalizeAngleDelta(angle + 90));
+  return distanceFromUp(candidateA) <= distanceFromUp(candidateB) ? candidateA : candidateB;
+}
+
 // The angle between the neck (shoulder midpoint -> ear midpoint) and the
-// torso (hip midpoint -> shoulder midpoint). Using the torso as the
-// reference axis, rather than assuming the camera's vertical is "up",
-// keeps the score stable if the person leans back in their chair or the
-// webcam itself is slightly tilted.
+// shoulder line's own perpendicular. Using the shoulder line as the
+// reference axis — rather than assuming the camera's vertical is "up", or
+// requiring hips — keeps the score stable if the webcam is slightly tilted,
+// and works with typical laptop/monitor webcam framing, where hips are
+// essentially never visible (they're below desk level). Hip landmarks are
+// still extracted when available (see PostureLandmarks) but intentionally
+// don't feed into this formula: mixing a hip-referenced angle into some
+// samples and a shoulder-only one into others would make baseline and live
+// readings inconsistent depending on which happened to be visible when.
 export function computeNeckTorsoAngle(landmarks: PostureLandmarks): number {
   const shoulderMid = midpoint(landmarks.leftShoulder, landmarks.rightShoulder);
-  const hipMid = midpoint(landmarks.leftHip, landmarks.rightHip);
   const earMid = midpoint(landmarks.leftEar, landmarks.rightEar);
 
-  const torsoAngle = angleBetween(hipMid, shoulderMid);
   const neckAngle = angleBetween(shoulderMid, earMid);
+  const torsoAngle = shoulderUpAngle(landmarks.leftShoulder, landmarks.rightShoulder);
 
   return normalizeAngleDelta(neckAngle - torsoAngle);
 }

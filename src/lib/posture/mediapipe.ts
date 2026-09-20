@@ -14,8 +14,14 @@ export interface PostureLandmarks {
   rightShoulder: Point2D;
   leftEar: Point2D;
   rightEar: Point2D;
-  leftHip: Point2D;
-  rightHip: Point2D;
+  // Optional: typical laptop/monitor webcam framing sits above desk level
+  // and never shows hips at all (confirmed via debug logging — hip
+  // visibility sits around 0.01 on a normal laptop setup, vs. 0.99+ for
+  // shoulders/ears). Extracted when visible, but nothing in the current
+  // scoring math depends on them — see computeNeckTorsoAngle in
+  // lib/scoring.ts.
+  leftHip?: Point2D;
+  rightHip?: Point2D;
 }
 
 // Indices into PoseLandmarker's 33-point BlazePose topology.
@@ -75,9 +81,9 @@ export function extractPostureLandmarks(
   const points = result.landmarks[0];
   if (!points) return null;
 
-  const at = (index: number): Point2D | null => {
+  const at = (index: number): Point2D | undefined => {
     const point = points[index];
-    if (!point || point.visibility < MIN_VISIBILITY) return null;
+    if (!point || point.visibility < MIN_VISIBILITY) return undefined;
     return { x: point.x, y: point.y };
   };
 
@@ -85,19 +91,16 @@ export function extractPostureLandmarks(
   const rightShoulder = at(LANDMARK_INDEX.rightShoulder);
   const leftEar = at(LANDMARK_INDEX.leftEar);
   const rightEar = at(LANDMARK_INDEX.rightEar);
-  const leftHip = at(LANDMARK_INDEX.leftHip);
-  const rightHip = at(LANDMARK_INDEX.rightHip);
 
-  if (
-    !leftShoulder ||
-    !rightShoulder ||
-    !leftEar ||
-    !rightEar ||
-    !leftHip ||
-    !rightHip
-  ) {
+  // Shoulders and ears are required. Hips are opportunistic — see
+  // PostureLandmarks — since typical laptop webcam framing never shows
+  // them, and gating on them here would mean scoring never runs at all.
+  if (!leftShoulder || !rightShoulder || !leftEar || !rightEar) {
     return null;
   }
+
+  const leftHip = at(LANDMARK_INDEX.leftHip);
+  const rightHip = at(LANDMARK_INDEX.rightHip);
 
   return { leftShoulder, rightShoulder, leftEar, rightEar, leftHip, rightHip };
 }
