@@ -293,7 +293,7 @@ export default function CalibrationPage() {
 
   useEffect(() => {
     if (step !== "complete") return;
-    const timeout = setTimeout(() => router.push("/dashboard"), 1200);
+    const timeout = setTimeout(() => router.push("/dashboard?calibrated=1"), 1200);
     return () => clearTimeout(timeout);
   }, [step, router]);
 
