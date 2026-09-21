@@ -3,16 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
+export type SessionStatus = "starting" | "active" | "ended";
+
 // Manages the active session lifecycle: starting one inserts a row into
 // `sessions` tied to the signed-in user's ID (RLS requires this — see
 // supabase/migrations/0002_rls.sql), ending one sets ended_at.
 export function useSession() {
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [status, setStatus] = useState<SessionStatus>("starting");
   const startedRef = useRef(false);
 
   const startSession = useCallback(async () => {
     if (startedRef.current) return;
     startedRef.current = true;
+    setStatus("starting");
 
     const supabase = createSupabaseBrowserClient();
     const { data: userData } = await supabase.auth.getUser();
@@ -29,6 +33,7 @@ export function useSession() {
 
     if (!error && data) {
       setSessionId(data.id);
+      setStatus("active");
     } else {
       startedRef.current = false;
     }
@@ -44,6 +49,7 @@ export function useSession() {
       .eq("id", sessionId);
 
     setSessionId(null);
+    setStatus("ended");
     startedRef.current = false;
   }, [sessionId]);
 
@@ -51,5 +57,5 @@ export function useSession() {
     startSession();
   }, [startSession]);
 
-  return { sessionId, startSession, endSession };
+  return { sessionId, status, startSession, endSession };
 }

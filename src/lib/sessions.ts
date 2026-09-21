@@ -23,6 +23,11 @@ export interface SessionDetail {
   hydrationData: ScorePoint[];
 }
 
+// If a session has no explicit ended_at and no posture/hydration activity
+// for this long, treat it as abandoned (tab closed, laptop slept, etc.)
+// rather than showing "In progress" forever.
+const ABANDONED_AFTER_MS = 5 * 60 * 1000;
+
 function average(values: number[]): number | null {
   if (values.length === 0) return null;
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
@@ -37,6 +42,24 @@ function computeDurationSeconds(
   return Math.max(0, Math.round(seconds));
 }
 
+// Computed at read time rather than via a background job — matches how
+// duration/averages are already derived on the fly here rather than
+// stored. If the session was never explicitly ended and its last known
+// activity (or, absent any readings, its start) is older than the
+// abandonment window, treat it as having ended then.
+function computeEffectiveEndedAt(
+  startedAt: string,
+  endedAt: string | null,
+  lastReadingAt: string | null
+): string | null {
+  if (endedAt) return endedAt;
+
+  const lastActivity = lastReadingAt ?? startedAt;
+  const idleMs = Date.now() - new Date(lastActivity).getTime();
+
+  return idleMs > ABANDONED_AFTER_MS ? lastActivity : null;
+}
+
 function groupScoresBySession(
   rows: { session_id: string; score: number }[]
 ): Map<string, number[]> {
@@ -47,6 +70,30 @@ function groupScoresBySession(
     bySession.set(row.session_id, scores);
   }
   return bySession;
+}
+
+function latestTimestamp(rows: { timestamp: string }[]): string | null {
+  return rows.reduce<string | null>((latest, row) => {
+    if (!latest || new Date(row.timestamp).getTime() > new Date(latest).getTime()) {
+      return row.timestamp;
+    }
+    return latest;
+  }, null);
+}
+
+function latestTimestampBySession(
+  rowSets: { session_id: string; timestamp: string }[][]
+): Map<string, string> {
+  const latest = new Map<string, string>();
+  for (const rows of rowSets) {
+    for (const row of rows) {
+      const current = latest.get(row.session_id);
+      if (!current || new Date(row.timestamp).getTime() > new Date(current).getTime()) {
+        latest.set(row.session_id, row.timestamp);
+      }
+    }
+  }
+  return latest;
 }
 
 // Scoped to the signed-in user: sessions is filtered explicitly by
@@ -71,8 +118,8 @@ export async function getSessions(): Promise<SessionSummary[]> {
 
   const [{ data: postureReadings, error: postureError }, { data: hydrationReadings, error: hydrationError }] =
     await Promise.all([
-      supabase.from("posture_readings").select("session_id, score").in("session_id", sessionIds),
-      supabase.from("hydration_readings").select("session_id, score").in("session_id", sessionIds),
+      supabase.from("posture_readings").select("session_id, score, timestamp").in("session_id", sessionIds),
+      supabase.from("hydration_readings").select("session_id, score, timestamp").in("session_id", sessionIds),
     ]);
 
   if (postureError) throw postureError;
@@ -80,15 +127,27 @@ export async function getSessions(): Promise<SessionSummary[]> {
 
   const postureBySession = groupScoresBySession(postureReadings ?? []);
   const hydrationBySession = groupScoresBySession(hydrationReadings ?? []);
+  const lastReadingBySession = latestTimestampBySession([
+    postureReadings ?? [],
+    hydrationReadings ?? [],
+  ]);
 
-  return sessions.map((session) => ({
-    id: session.id,
-    startedAt: session.started_at,
-    endedAt: session.ended_at,
-    durationSeconds: computeDurationSeconds(session.started_at, session.ended_at),
-    avgPostureScore: average(postureBySession.get(session.id) ?? []),
-    avgHydrationScore: average(hydrationBySession.get(session.id) ?? []),
-  }));
+  return sessions.map((session) => {
+    const effectiveEndedAt = computeEffectiveEndedAt(
+      session.started_at,
+      session.ended_at,
+      lastReadingBySession.get(session.id) ?? null
+    );
+
+    return {
+      id: session.id,
+      startedAt: session.started_at,
+      endedAt: effectiveEndedAt,
+      durationSeconds: computeDurationSeconds(session.started_at, effectiveEndedAt),
+      avgPostureScore: average(postureBySession.get(session.id) ?? []),
+      avgHydrationScore: average(hydrationBySession.get(session.id) ?? []),
+    };
+  });
 }
 
 export async function getSessionDetail(id: string): Promise<SessionDetail | null> {
@@ -129,11 +188,21 @@ export async function getSessionDetail(id: string): Promise<SessionDetail | null
       score: row.score,
     }));
 
+  const lastReadingAt = latestTimestamp([
+    ...(postureReadings ?? []),
+    ...(hydrationReadings ?? []),
+  ]);
+  const effectiveEndedAt = computeEffectiveEndedAt(
+    session.started_at,
+    session.ended_at,
+    lastReadingAt
+  );
+
   return {
     id: session.id,
     startedAt: session.started_at,
-    endedAt: session.ended_at,
-    durationSeconds: computeDurationSeconds(session.started_at, session.ended_at),
+    endedAt: effectiveEndedAt,
+    durationSeconds: computeDurationSeconds(session.started_at, effectiveEndedAt),
     postureData: toScorePoints(postureReadings ?? []),
     hydrationData: toScorePoints(hydrationReadings ?? []),
   };
@@ -150,5 +219,5 @@ export function formatSessionDuration(seconds: number | null): string {
   if (seconds === null) return "In progress";
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
-  return `${minutes}m ${remainingSeconds}s`;
+  return `Completed · ${minutes}m ${remainingSeconds}s`;
 }
