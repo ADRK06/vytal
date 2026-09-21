@@ -18,3 +18,22 @@
     transform: translate(-3%, 5%) scale(0.95);
   }
 }
+
+/* Slow organic morph for the Hero background blobs — border-radius
+   animating between asymmetric values (not just a circle) is what reads
+   as "liquid" rather than a geometric shape drifting around. */
+@keyframes liquid-morph {
+  0%,
+  100% {
+    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    border-radius: 40% 60% 70% 30% / 50% 60% 30% 60%;
+    transform: translate(3%, -4%) scale(1.08) rotate(8deg);
+  }
+  66% {
+    border-radius: 50% 50% 40% 60% / 40% 60% 60% 40%;
+    transform: translate(-4%, 3%) scale(0.95) rotate(-6deg);
+  }
+}

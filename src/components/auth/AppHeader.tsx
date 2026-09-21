@@ -15,8 +15,10 @@ export async function AppHeader() {
 
   return (
     <header className="mx-auto flex max-w-4xl items-center justify-between px-6 pt-8 sm:px-10 lg:px-16">
+      {/* Always the marketing homepage, regardless of auth state — the
+          wordmark is the one constant way back to / from anywhere. */}
       <Link
-        href={isLoggedIn ? "/dashboard" : "/"}
+        href="/"
         className="font-mono text-xs uppercase tracking-[0.2em] text-text transition-colors hover:text-text-dim"
       >
         VYTAL

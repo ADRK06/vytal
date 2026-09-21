@@ -135,7 +135,9 @@ export function SessionTrendChart({ sessions }: SessionTrendChartProps) {
               dot={{ r: 3, strokeWidth: 0, fill: SERIES.posture.color }}
               activeDot={{ r: 4, strokeWidth: 2, stroke: "#0A0E12" }}
               connectNulls
-              isAnimationActive={false}
+              isAnimationActive
+              animationDuration={1100}
+              animationEasing="ease-out"
             />
             <Line
               dataKey="hydration"
@@ -145,7 +147,9 @@ export function SessionTrendChart({ sessions }: SessionTrendChartProps) {
               dot={{ r: 3, strokeWidth: 0, fill: SERIES.hydration.color }}
               activeDot={{ r: 4, strokeWidth: 2, stroke: "#0A0E12" }}
               connectNulls
-              isAnimationActive={false}
+              isAnimationActive
+              animationDuration={1100}
+              animationEasing="ease-out"
             />
           </LineChart>
         </ResponsiveContainer>

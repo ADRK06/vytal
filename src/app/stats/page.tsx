@@ -2,31 +2,11 @@ import { getSessionStats, type SessionStats } from "@/lib/sessions";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SessionTrendChart } from "@/components/charts/SessionTrendChart";
+import { StatCard } from "@/components/stats/StatCard";
 
 // Trends change as new sessions complete — never freeze this as static
 // HTML at build time.
 export const dynamic = "force-dynamic";
-
-function StatCard({
-  label,
-  value,
-  colorClassName,
-}: {
-  label: string;
-  value: string;
-  colorClassName: string;
-}) {
-  return (
-    <GlassPanel className="p-6">
-      <span className="font-mono text-xs uppercase tracking-[0.2em] text-text-dim">
-        {label}
-      </span>
-      <div className={`mt-2 font-mono text-4xl font-medium ${colorClassName}`}>
-        {value}
-      </div>
-    </GlassPanel>
-  );
-}
 
 export default async function StatsPage() {
   let stats: SessionStats | null = null;
@@ -61,17 +41,19 @@ export default async function StatsPage() {
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
             <StatCard
               label="Avg posture"
-              value={stats.overallAvgPosture !== null ? String(stats.overallAvgPosture) : "—"}
+              value={stats.overallAvgPosture}
               colorClassName="text-posture"
+              clamp={[0, 100]}
             />
             <StatCard
               label="Avg hydration"
-              value={stats.overallAvgHydration !== null ? String(stats.overallAvgHydration) : "—"}
+              value={stats.overallAvgHydration}
               colorClassName="text-hydration"
+              clamp={[0, 100]}
             />
             <StatCard
               label="Completed sessions"
-              value={String(stats.completedCount)}
+              value={stats.completedCount}
               colorClassName="text-text"
             />
           </div>

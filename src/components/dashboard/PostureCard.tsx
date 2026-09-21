@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePostureScore } from "@/hooks/usePostureScore";
 import { usePostureRealtime } from "@/hooks/usePostureRealtime";
+import { useAnimatedNumber } from "@/hooks/useAnimatedNumber";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -21,6 +22,7 @@ export function PostureCard({ sessionId }: PostureCardProps) {
   // way HydrationCard already works.
   const { videoRef, status: captureStatus, retry } = usePostureScore(sessionId);
   const { score, status: liveStatus } = usePostureRealtime(sessionId);
+  const displayScore = useAnimatedNumber(score ?? 0, { clamp: [0, 100] });
 
   const isCapturing = captureStatus === "live";
 
@@ -89,12 +91,12 @@ export function PostureCard({ sessionId }: PostureCardProps) {
         {isCapturing && liveStatus === "live" && score !== null && (
           <div>
             <span className="font-mono text-4xl font-medium text-posture">
-              {score}
+              {displayScore}
             </span>
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
               <div
-                className="h-full rounded-full bg-posture transition-[width] duration-500"
-                style={{ width: `${score}%` }}
+                className="h-full rounded-full bg-posture"
+                style={{ width: `${displayScore}%` }}
               />
             </div>
           </div>

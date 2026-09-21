@@ -1,6 +1,7 @@
 "use client";
 
 import { useHydrationRealtime } from "@/hooks/useHydrationRealtime";
+import { useAnimatedNumber } from "@/hooks/useAnimatedNumber";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -10,6 +11,7 @@ interface HydrationCardProps {
 
 export function HydrationCard({ sessionId }: HydrationCardProps) {
   const { score, status } = useHydrationRealtime(sessionId);
+  const displayScore = useAnimatedNumber(score ?? 0, { clamp: [0, 100] });
 
   return (
     <GlassPanel className="p-8">
@@ -37,12 +39,12 @@ export function HydrationCard({ sessionId }: HydrationCardProps) {
         {status === "live" && score !== null && (
           <div>
             <span className="font-mono text-4xl font-medium text-hydration">
-              {score}
+              {displayScore}
             </span>
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
               <div
-                className="h-full rounded-full bg-hydration transition-[width] duration-500"
-                style={{ width: `${score}%` }}
+                className="h-full rounded-full bg-hydration"
+                style={{ width: `${displayScore}%` }}
               />
             </div>
           </div>

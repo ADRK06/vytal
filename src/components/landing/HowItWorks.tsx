@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ScrollReveal } from "./ScrollReveal";
+import { ScrollEmphasisStep } from "./ScrollEmphasisStep";
 import {
   PostureIllustration,
   HydrationIllustration,
@@ -45,7 +45,7 @@ export function HowItWorks() {
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-24 px-6 py-24 sm:px-10 lg:px-16">
       {STEPS.map((step, index) => (
-        <ScrollReveal key={step.title}>
+        <ScrollEmphasisStep key={step.title}>
           <div
             className={`grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16 ${
               index % 2 === 1 ? "lg:[&>*:first-child]:order-2" : ""
@@ -75,7 +75,7 @@ export function HowItWorks() {
               {step.illustration}
             </div>
           </div>
-        </ScrollReveal>
+        </ScrollEmphasisStep>
       ))}
     </section>
   );

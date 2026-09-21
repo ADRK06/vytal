@@ -34,6 +34,24 @@ export function Hero({ isLoggedIn }: HeroProps) {
 
   return (
     <section className="relative overflow-hidden px-6 py-24 sm:px-10 lg:px-16">
+      {/* Slow, continuous liquid gradient — pure CSS (not Framer Motion,
+          not interactive), sits behind the content at low opacity so the
+          headline and panel stay fully readable on top of it. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div
+          className="absolute -left-[15%] -top-[20%] h-[520px] w-[520px] bg-hydration/20 blur-[120px]"
+          style={{ animation: "liquid-morph 26s ease-in-out infinite" }}
+        />
+        <div
+          className="absolute -right-[10%] top-[10%] h-[460px] w-[460px] bg-posture/18 blur-[130px]"
+          style={{ animation: "liquid-morph 32s ease-in-out infinite reverse" }}
+        />
+        <div
+          className="absolute bottom-[-25%] left-[20%] h-[480px] w-[480px] bg-hydration/10 blur-[140px]"
+          style={{ animation: "liquid-morph 38s ease-in-out infinite" }}
+        />
+      </div>
+
       <motion.div
         variants={container}
         initial="hidden"

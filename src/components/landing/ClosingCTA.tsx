@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ScrollReveal } from "./ScrollReveal";
 import { GradientBorderButton } from "./GradientBorderButton";
 
@@ -57,12 +58,12 @@ export function ClosingCTA({ isLoggedIn }: ClosingCTAProps) {
       <footer className="relative mx-auto mt-32 flex max-w-6xl flex-col items-center gap-3 px-6 font-mono text-xs uppercase tracking-[0.2em] text-text-dim sm:flex-row sm:justify-between sm:px-10 lg:px-16">
         <span>© {CURRENT_YEAR} VYTAL</span>
         <div className="flex items-center gap-6">
-          <a href="#" className="transition-colors hover:text-text">
+          <Link href="/privacy" className="transition-colors hover:text-text">
             Privacy
-          </a>
-          <a href="#" className="transition-colors hover:text-text">
+          </Link>
+          <Link href="/terms" className="transition-colors hover:text-text">
             Terms
-          </a>
+          </Link>
         </div>
       </footer>
     </section>
