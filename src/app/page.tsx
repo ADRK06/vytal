@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Hero } from "@/components/landing/Hero";
+import { HowItWorks } from "@/components/landing/HowItWorks";
+import { FeatureHighlights } from "@/components/landing/FeatureHighlights";
+import { ClosingCTA } from "@/components/landing/ClosingCTA";
 
 export default async function HomePage() {
   let isLoggedIn = false;
@@ -24,6 +27,9 @@ export default async function HomePage() {
         </Link>
       </div>
       <Hero isLoggedIn={isLoggedIn} />
+      <HowItWorks />
+      <FeatureHighlights />
+      <ClosingCTA isLoggedIn={isLoggedIn} />
     </main>
   );
 }
