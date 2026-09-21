@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import {
@@ -298,6 +299,14 @@ export default function CalibrationPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 py-16">
+      {step !== "complete" && (
+        <Link
+          href="/dashboard"
+          className="mb-4 inline-block self-start font-mono text-xs uppercase tracking-[0.2em] text-text-dim transition-colors hover:text-text"
+        >
+          ← Cancel and back to dashboard
+        </Link>
+      )}
       <GlassPanel className="relative w-full p-10">
         {step === "posture" && (
           <PostureCalibrationStep onComplete={() => setStep("hydration")} />

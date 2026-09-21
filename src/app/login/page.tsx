@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AuthForm } from "@/components/auth/AuthForm";
+import { AppHeader } from "@/components/auth/AppHeader";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -23,14 +24,17 @@ export default async function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      {configError ? (
-        <GlassPanel className="w-full max-w-sm p-8">
-          <EmptyState message="Supabase isn't configured. Check your environment variables." />
-        </GlassPanel>
-      ) : (
-        <AuthForm />
-      )}
-    </main>
+    <>
+      <AppHeader />
+      <main className="flex min-h-screen items-center justify-center px-6">
+        {configError ? (
+          <GlassPanel className="w-full max-w-sm p-8">
+            <EmptyState message="Supabase isn't configured. Check your environment variables." />
+          </GlassPanel>
+        ) : (
+          <AuthForm />
+        )}
+      </main>
+    </>
   );
 }

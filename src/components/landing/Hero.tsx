@@ -25,7 +25,13 @@ const item: Variants = {
   },
 };
 
-export function Hero() {
+interface HeroProps {
+  isLoggedIn: boolean;
+}
+
+export function Hero({ isLoggedIn }: HeroProps) {
+  const ctaHref = isLoggedIn ? "/dashboard" : "/login";
+
   return (
     <section className="relative overflow-hidden px-6 py-24 sm:px-10 lg:px-16">
       <motion.div
@@ -60,7 +66,7 @@ export function Hero() {
           </motion.p>
 
           <motion.div variants={item}>
-            <LiquidGlassButton>Start a session</LiquidGlassButton>
+            <LiquidGlassButton href={ctaHref}>Start a session</LiquidGlassButton>
           </motion.div>
         </div>
 
