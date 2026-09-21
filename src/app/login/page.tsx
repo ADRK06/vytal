@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { LoginForm } from "@/components/auth/LoginForm";
+import { AuthForm } from "@/components/auth/AuthForm";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -29,7 +29,7 @@ export default async function LoginPage() {
           <EmptyState message="Supabase isn't configured. Check your environment variables." />
         </GlassPanel>
       ) : (
-        <LoginForm />
+        <AuthForm />
       )}
     </main>
   );
