@@ -7,9 +7,12 @@ import {
 } from "@/lib/posture/mediapipe";
 import {
   computeAngleDeviation,
+  computeNeckTorsoAngle,
   getStoredPostureBaseline,
   scoreFromDeviation,
+  scorePosture,
 } from "@/lib/scoring";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type PostureStatus =
   | "requesting"
@@ -25,11 +28,17 @@ const SAMPLE_INTERVAL_MS = 1000;
 // visible jump in the displayed score.
 const SMOOTHING_WINDOW = 4;
 
-export function usePostureScore() {
+// Owns the capture pipeline (webcam + MediaPipe) and writes each computed
+// score to posture_readings — it does not expose the score itself, since
+// the dashboard now displays posture via usePostureRealtime (a Realtime
+// subscription reading the same table back), not local component state.
+// This hook's `status` still covers the capture-specific states (camera
+// permission, missing baseline) that a generic connecting/live/disconnected
+// read-side status can't express.
+export function usePostureScore(sessionId: string) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<PostureStatus>("requesting");
-  const [score, setScore] = useState<number | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -39,7 +48,6 @@ export function usePostureScore() {
 
     async function start() {
       setStatus("requesting");
-      setScore(null);
 
       const baseline = getStoredPostureBaseline();
       if (!baseline) {
@@ -84,6 +92,14 @@ export function usePostureScore() {
 
       if (cancelled) return;
 
+      let supabase;
+      try {
+        supabase = createSupabaseBrowserClient();
+      } catch {
+        if (!cancelled) setStatus("error");
+        return;
+      }
+
       intervalId = setInterval(() => {
         const currentVideo = videoRef.current;
         if (!currentVideo || currentVideo.readyState < 2) return;
@@ -95,15 +111,47 @@ export function usePostureScore() {
         // rather than smoothing in an unreliable reading.
         if (!landmarks) return;
 
-        deviationWindow.push(computeAngleDeviation(landmarks, baseline));
+        const deviation = computeAngleDeviation(landmarks, baseline);
+        deviationWindow.push(deviation);
         if (deviationWindow.length > SMOOTHING_WINDOW) deviationWindow.shift();
 
         const smoothedDeviation =
           deviationWindow.reduce((sum, value) => sum + value, 0) /
           deviationWindow.length;
 
-        setScore(scoreFromDeviation(smoothedDeviation));
+        // TEMP DEBUG — remove once the score-stuck-at-85-90 issue is diagnosed.
+        console.log("[posture debug] landmarks", {
+          leftShoulder: landmarks.leftShoulder,
+          rightShoulder: landmarks.rightShoulder,
+          leftEar: landmarks.leftEar,
+          rightEar: landmarks.rightEar,
+        });
+        console.log(
+          "[posture debug]",
+          "neckTorsoAngle:", computeNeckTorsoAngle(landmarks).toFixed(2),
+          "baseline:", baseline.neckTorsoAngle.toFixed(2),
+          "deviation:", deviation.toFixed(2),
+          "windowedAvg:", smoothedDeviation.toFixed(2),
+          "windowSize:", deviationWindow.length,
+          "score:", scorePosture(landmarks, baseline)
+        );
+
+        const nextScore = scoreFromDeviation(smoothedDeviation);
         setStatus("live");
+
+        // Best-effort, fire-and-forget: this runs once a second in a tight
+        // loop, so it isn't awaited — a dropped write just means one fewer
+        // point in the session's history, not a broken capture pipeline.
+        supabase
+          .from("posture_readings")
+          .insert({
+            session_id: sessionId,
+            score: nextScore,
+            timestamp: new Date().toISOString(),
+          })
+          .then(({ error }) => {
+            if (error) console.error("Failed to write posture reading:", error);
+          });
       }, SAMPLE_INTERVAL_MS);
     }
 
@@ -115,9 +163,9 @@ export function usePostureScore() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
-  }, [attempt]);
+  }, [attempt, sessionId]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
-  return { videoRef, status, score, retry };
+  return { videoRef, status, retry };
 }

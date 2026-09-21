@@ -1,4 +1,4 @@
-import type { HydrationSource, HydrationSourceCallbacks } from "@/types";
+import type { LiveScoreSource, LiveScoreCallbacks } from "@/types";
 
 const UPDATE_INTERVAL_MS = 1000;
 const BASELINE_SCORE = 68;
@@ -28,12 +28,13 @@ export function nextHydrationValue(previous: number): number {
   return clamp(Math.round(previous + pull + noise), 0, 100);
 }
 
-// Local-dev stand-in for the real Supabase Realtime subscription on
-// hydration_readings. Same HydrationSource interface, so a component using
-// this can switch to the real source later without changing its own code.
-export function createMockHydrationSource(seed = "default"): HydrationSource {
+// Used by the hydration calibration step (dashboard/calibration/page.tsx)
+// to simulate a resting-baseline reading stream, since there's no real
+// GSR/PPG hardware to sample from yet. The dashboard's own live display no
+// longer uses this — see lib/supabase/realtime.ts.
+export function createMockHydrationSource(seed = "default"): LiveScoreSource {
   return {
-    subscribe(callbacks: HydrationSourceCallbacks) {
+    subscribe(callbacks: LiveScoreCallbacks) {
       let value = clamp(BASELINE_SCORE + (hashSeed(seed) % 21) - 10, 0, 100);
 
       callbacks.onStatusChange?.("connecting");

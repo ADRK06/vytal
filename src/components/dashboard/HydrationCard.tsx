@@ -27,11 +27,11 @@ export function HydrationCard({ sessionId }: HydrationCardProps) {
 
       <div className="mt-6">
         {status === "connecting" && (
-          <EmptyState message="Connecting to hydration sensor…" />
+          <EmptyState message="No data received yet…" />
         )}
 
         {status === "disconnected" && (
-          <EmptyState message="Sensor disconnected. Check the mouse's WiFi connection." />
+          <EmptyState message="Sensor appears disconnected. Check the mouse's WiFi connection." />
         )}
 
         {status === "live" && score !== null && (

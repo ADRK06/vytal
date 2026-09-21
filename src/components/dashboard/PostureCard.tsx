@@ -2,14 +2,27 @@
 
 import Link from "next/link";
 import { usePostureScore } from "@/hooks/usePostureScore";
+import { usePostureRealtime } from "@/hooks/usePostureRealtime";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 const RETRY_BUTTON_CLASSES =
   "self-start rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 font-mono text-xs uppercase tracking-wide text-text transition-colors hover:bg-white/[0.12]";
 
-export function PostureCard() {
-  const { videoRef, status, score, retry } = usePostureScore();
+interface PostureCardProps {
+  sessionId: string;
+}
+
+export function PostureCard({ sessionId }: PostureCardProps) {
+  // Capture (webcam + MediaPipe) and the displayed score are two separate
+  // concerns: usePostureScore drives the capture pipeline and writes to
+  // posture_readings, while usePostureRealtime reads the score back from
+  // Supabase — so what's on screen always reflects the database, the same
+  // way HydrationCard already works.
+  const { videoRef, status: captureStatus, retry } = usePostureScore(sessionId);
+  const { score, status: liveStatus } = usePostureRealtime(sessionId);
+
+  const isCapturing = captureStatus === "live";
 
   return (
     <GlassPanel className="relative p-8">
@@ -25,7 +38,7 @@ export function PostureCard() {
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-text-dim">
           Posture
         </span>
-        {status === "live" && (
+        {isCapturing && liveStatus === "live" && (
           <span className="flex items-center gap-2 font-mono text-xs text-text-dim">
             <span className="h-2 w-2 animate-pulse rounded-full bg-posture" />
             Live
@@ -34,11 +47,11 @@ export function PostureCard() {
       </div>
 
       <div className="mt-6">
-        {status === "requesting" && (
+        {captureStatus === "requesting" && (
           <EmptyState message="Requesting camera access…" />
         )}
 
-        {status === "no-baseline" && (
+        {captureStatus === "no-baseline" && (
           <div className="flex flex-col items-start gap-3">
             <EmptyState message="No posture baseline yet. Calibrate before starting a session." />
             <Link href="/dashboard/calibration" className={RETRY_BUTTON_CLASSES}>
@@ -47,7 +60,7 @@ export function PostureCard() {
           </div>
         )}
 
-        {status === "denied" && (
+        {captureStatus === "denied" && (
           <div className="flex flex-col items-start gap-3">
             <p className="text-sm text-text-dim">
               Camera access was denied, so posture can&apos;t be scored.
@@ -60,7 +73,7 @@ export function PostureCard() {
           </div>
         )}
 
-        {status === "error" && (
+        {captureStatus === "error" && (
           <div className="flex flex-col items-start gap-3">
             <p className="text-sm text-text-dim">
               Couldn&apos;t start posture detection. Make sure a camera is
@@ -72,7 +85,15 @@ export function PostureCard() {
           </div>
         )}
 
-        {status === "live" && score !== null && (
+        {isCapturing && liveStatus === "connecting" && (
+          <EmptyState message="No data received yet…" />
+        )}
+
+        {isCapturing && liveStatus === "disconnected" && (
+          <EmptyState message="Sensor appears disconnected. Readings have stopped arriving." />
+        )}
+
+        {isCapturing && liveStatus === "live" && score !== null && (
           <div>
             <span className="font-mono text-4xl font-medium text-posture">
               {score}

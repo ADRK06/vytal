@@ -23,17 +23,21 @@ export interface HydrationReading {
   raw_ppg: number;
 }
 
-export type HydrationStatus = "connecting" | "live" | "disconnected";
+// "connecting" == no reading received yet (still waiting on the first
+// one); "disconnected" == readings stopped arriving after being live, or
+// the Realtime channel itself dropped.
+export type LiveScoreStatus = "connecting" | "live" | "disconnected";
 
-export interface HydrationSourceCallbacks {
+export interface LiveScoreCallbacks {
   onReading: (score: number) => void;
-  onStatusChange?: (status: HydrationStatus) => void;
+  onStatusChange?: (status: LiveScoreStatus) => void;
 }
 
-// Implemented by both the local dev mock (lib/mock/hydrationMock.ts) and,
-// eventually, a real Supabase Realtime subscription on hydration_readings.
-// Consumers (useHydrationRealtime) only depend on this interface, so
-// swapping the mock for the real thing later is a one-line change there.
-export interface HydrationSource {
-  subscribe(callbacks: HydrationSourceCallbacks): () => void;
+// Implemented by both the local dev mock (lib/mock/hydrationMock.ts, still
+// used by the hydration calibration step) and the real Supabase Realtime
+// subscription (lib/supabase/realtime.ts) that both PostureCard and
+// HydrationCard now read from. Consumers (useLiveScore and its thin
+// per-signal wrappers) only depend on this interface.
+export interface LiveScoreSource {
+  subscribe(callbacks: LiveScoreCallbacks): () => void;
 }
