@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   extractPostureLandmarks,
   getPoseLandmarker,
@@ -176,11 +177,7 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
 
       {status === "denied" && (
         <>
-          <p className="text-sm text-text-dim">
-            Camera access was denied, so posture can&apos;t be calibrated.
-            Allow camera access for this site in your browser settings, then
-            retry.
-          </p>
+          <EmptyState message="Camera access was denied, so posture can't be calibrated. Allow camera access for this site in your browser settings, then retry." />
           <button onClick={retry} className={RETRY_BUTTON_CLASSES}>
             Retry
           </button>
@@ -189,10 +186,7 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
 
       {status === "error" && (
         <>
-          <p className="text-sm text-text-dim">
-            Couldn&apos;t calibrate posture. Make sure a camera is connected
-            and try again.
-          </p>
+          <EmptyState message="Couldn't calibrate posture. Make sure a camera is connected and try again." />
           <button onClick={retry} className={RETRY_BUTTON_CLASSES}>
             Retry
           </button>
@@ -276,7 +270,7 @@ function HydrationCalibrationStep({ onComplete }: { onComplete: () => void }) {
 function CompleteStep() {
   return (
     <div className="flex flex-col items-center gap-3 text-center">
-      <span className="h-2 w-2 animate-pulse rounded-full bg-hydration" />
+      <span className="h-2 w-2 animate-pulse rounded-full bg-white/60" />
       <h1 className="font-sans text-xl font-semibold text-text">
         Calibration complete
       </h1>
@@ -298,7 +292,7 @@ export default function CalibrationPage() {
   }, [step, router]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 py-16">
+    <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 py-16 sm:px-10 lg:px-16">
       {step !== "complete" && (
         <Link
           href="/dashboard"
@@ -307,7 +301,7 @@ export default function CalibrationPage() {
           ← Cancel and back to dashboard
         </Link>
       )}
-      <GlassPanel className="relative w-full p-10">
+      <GlassPanel className="relative w-full p-8">
         {step === "posture" && (
           <PostureCalibrationStep onComplete={() => setStep("hydration")} />
         )}

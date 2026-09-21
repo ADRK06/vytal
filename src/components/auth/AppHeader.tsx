@@ -14,7 +14,7 @@ export async function AppHeader() {
   }
 
   return (
-    <header className="mx-auto flex max-w-6xl items-center justify-between px-6 pt-8 sm:px-10 lg:px-16">
+    <header className="mx-auto flex max-w-4xl items-center justify-between px-6 pt-8 sm:px-10 lg:px-16">
       <Link
         href={isLoggedIn ? "/dashboard" : "/"}
         className="font-mono text-xs uppercase tracking-[0.2em] text-text transition-colors hover:text-text-dim"

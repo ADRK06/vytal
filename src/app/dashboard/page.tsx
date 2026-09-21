@@ -35,24 +35,22 @@ export default function DashboardPage() {
   }, [router, startSession]);
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-16 sm:px-10 lg:px-16">
+    <main className="mx-auto max-w-4xl px-6 py-16 sm:px-10 lg:px-16">
+      <h1 className="mb-8 font-sans text-2xl font-semibold text-text">
+        Dashboard
+      </h1>
+
       {status === "idle" && (
-        <div className="max-w-3xl">
-          <button onClick={() => router.push("/dashboard/calibration")} className={BUTTON_CLASSES}>
-            Start Session
-          </button>
-        </div>
+        <button onClick={() => router.push("/dashboard/calibration")} className={BUTTON_CLASSES}>
+          Start Session
+        </button>
       )}
 
-      {status === "starting" && (
-        <div className="max-w-3xl">
-          <EmptyState message="Starting session…" />
-        </div>
-      )}
+      {status === "starting" && <EmptyState message="Starting session…" />}
 
       {status === "active" && sessionId && (
         <>
-          <div className="mb-6 flex max-w-3xl items-center gap-4">
+          <div className="mb-6 flex items-center gap-4">
             <div className="flex-1">
               <SessionTimer />
             </div>
@@ -61,7 +59,7 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          <div className="grid max-w-3xl grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <PostureCard sessionId={sessionId} />
             <HydrationCard sessionId={sessionId} />
           </div>

@@ -80,7 +80,7 @@ export function Hero({ isLoggedIn }: HeroProps) {
                 Live session
               </span>
               <span className="flex items-center gap-2 font-mono text-xs text-text-dim">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-hydration" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-white/60" />
                 Live
               </span>
             </div>

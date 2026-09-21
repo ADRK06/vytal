@@ -62,11 +62,7 @@ export function PostureCard({ sessionId }: PostureCardProps) {
 
         {captureStatus === "denied" && (
           <div className="flex flex-col items-start gap-3">
-            <p className="text-sm text-text-dim">
-              Camera access was denied, so posture can&apos;t be scored.
-              Allow camera access for this site in your browser settings,
-              then retry.
-            </p>
+            <EmptyState message="Camera access was denied, so posture can't be scored. Allow camera access for this site in your browser settings, then retry." />
             <button onClick={retry} className={RETRY_BUTTON_CLASSES}>
               Retry
             </button>
@@ -75,10 +71,7 @@ export function PostureCard({ sessionId }: PostureCardProps) {
 
         {captureStatus === "error" && (
           <div className="flex flex-col items-start gap-3">
-            <p className="text-sm text-text-dim">
-              Couldn&apos;t start posture detection. Make sure a camera is
-              connected and try again.
-            </p>
+            <EmptyState message="Couldn't start posture detection. Make sure a camera is connected and try again." />
             <button onClick={retry} className={RETRY_BUTTON_CLASSES}>
               Retry
             </button>

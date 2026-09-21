@@ -75,7 +75,7 @@ function ChartTooltip({
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#0A0E12]/95 px-3 py-2 font-mono text-xs backdrop-blur-[18px]">
+    <div className="rounded-xl border border-white/15 bg-background/95 px-3 py-2 font-mono text-xs backdrop-blur-[18px]">
       <div className="mb-1 text-text-dim">{formatElapsed(label ?? 0)}</div>
       {payload.map((entry) => {
         const series = SERIES[entry.dataKey];

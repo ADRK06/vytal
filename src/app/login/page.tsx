@@ -26,7 +26,7 @@ export default async function LoginPage() {
   return (
     <>
       <AppHeader />
-      <main className="flex min-h-screen items-center justify-center px-6">
+      <main className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 py-16 sm:px-10 lg:px-16">
         {configError ? (
           <GlassPanel className="w-full max-w-sm p-8">
             <EmptyState message="Supabase isn't configured. Check your environment variables." />
