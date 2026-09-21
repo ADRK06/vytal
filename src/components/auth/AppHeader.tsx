@@ -31,6 +31,9 @@ export async function AppHeader() {
             <Link href="/sessions" className="transition-colors hover:text-text">
               History
             </Link>
+            <Link href="/stats" className="transition-colors hover:text-text">
+              Stats
+            </Link>
           </nav>
           <SignOutButton />
         </div>

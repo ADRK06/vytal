@@ -23,6 +23,15 @@ export interface SessionDetail {
   hydrationData: ScorePoint[];
 }
 
+export interface SessionStats {
+  // Completed sessions only, oldest first — chart order (most recent on
+  // the right), unlike getSessions()'s newest-first list order.
+  sessions: SessionSummary[];
+  overallAvgPosture: number | null;
+  overallAvgHydration: number | null;
+  completedCount: number;
+}
+
 // If a session has no explicit ended_at and no posture/hydration activity
 // for this long, treat it as abandoned (tab closed, laptop slept, etc.)
 // rather than showing "In progress" forever.
@@ -148,6 +157,31 @@ export async function getSessions(): Promise<SessionSummary[]> {
       avgHydrationScore: average(hydrationBySession.get(session.id) ?? []),
     };
   });
+}
+
+// Trends across all of a user's sessions, for the /stats page — built on
+// getSessions() rather than re-querying, so this stays a pure aggregation
+// of the same data the history page already fetches. A session only
+// counts as "completed" (and factors into the averages/chart/count here)
+// once it has an effective endedAt — an in-progress session's partial
+// scores would otherwise skew the trend.
+export async function getSessionStats(): Promise<SessionStats> {
+  const sessions = await getSessions();
+  const completed = sessions.filter((session) => session.endedAt !== null);
+
+  const postureScores = completed
+    .map((session) => session.avgPostureScore)
+    .filter((score): score is number => score !== null);
+  const hydrationScores = completed
+    .map((session) => session.avgHydrationScore)
+    .filter((score): score is number => score !== null);
+
+  return {
+    sessions: [...completed].reverse(),
+    overallAvgPosture: average(postureScores),
+    overallAvgHydration: average(hydrationScores),
+    completedCount: completed.length,
+  };
 }
 
 export async function getSessionDetail(id: string): Promise<SessionDetail | null> {
