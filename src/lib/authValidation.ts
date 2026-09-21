@@ -1,19 +1,13 @@
 export const PASSWORD_MIN_LENGTH = 8;
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-export function isValidEmail(email: string): boolean {
-  return EMAIL_PATTERN.test(email);
-}
-
 export interface PasswordRequirement {
   id: string;
   label: string;
   met: boolean;
 }
 
-// Only for *creating* a password (sign-up, reset) — signing in just checks
-// the field isn't empty, since a real existing password may predate these
+// Only for *creating* a password (sign-up) — signing in just checks the
+// field isn't empty, since a real existing password may predate these
 // rules or differ from them.
 export function checkPasswordRequirements(password: string): PasswordRequirement[] {
   return [

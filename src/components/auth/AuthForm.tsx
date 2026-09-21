@@ -2,15 +2,15 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getAuthErrorMessage } from "@/lib/authErrors";
-import { isValidEmail, passwordRequirementsErrorMessage } from "@/lib/authValidation";
+import { passwordRequirementsErrorMessage } from "@/lib/authValidation";
+import { deriveEmailForUsername, normalizeUsername, usernameFormatErrorMessage } from "@/lib/username";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { PasswordRequirementsList } from "@/components/auth/PasswordRequirementsList";
 
 type Mode = "sign-in" | "sign-up";
-type Status = "idle" | "submitting" | "check-email";
+type Status = "idle" | "submitting";
 
 const TAB_BASE =
   "flex-1 rounded-full px-4 py-2 font-mono text-xs uppercase tracking-wide transition-colors";
@@ -22,11 +22,12 @@ const INPUT_CLASSES =
 
 function validate(
   mode: Mode,
-  email: string,
+  username: string,
   password: string,
   confirmPassword: string
 ): string | null {
-  if (!isValidEmail(email)) return "Enter a valid email address.";
+  const usernameError = usernameFormatErrorMessage(username);
+  if (usernameError) return usernameError;
 
   if (mode === "sign-up") {
     const passwordError = passwordRequirementsErrorMessage(password);
@@ -42,7 +43,7 @@ function validate(
 export function AuthForm() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("sign-in");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
@@ -56,10 +57,96 @@ export function AuthForm() {
     setStatus("idle");
   }
 
+  async function handleSignIn(supabase: ReturnType<typeof createSupabaseBrowserClient>) {
+    // A distinct "Username not found" needs its own check — signInWithPassword
+    // alone can't tell a nonexistent username apart from a wrong password
+    // (Supabase deliberately returns the same invalid_credentials for both).
+    const { data: profile, error: lookupError } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("username_lower", normalizeUsername(username))
+      .maybeSingle();
+
+    if (lookupError) {
+      setFormError("Something went wrong. Please try again.");
+      setStatus("idle");
+      return;
+    }
+    if (!profile) {
+      setFormError("Username not found.");
+      setStatus("idle");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: deriveEmailForUsername(username),
+      password,
+    });
+
+    if (error) {
+      setFormError(getAuthErrorMessage(error));
+      setStatus("idle");
+      return;
+    }
+
+    router.push("/dashboard");
+    router.refresh();
+  }
+
+  async function handleSignUp(supabase: ReturnType<typeof createSupabaseBrowserClient>) {
+    // Fast client-side pre-check — avoids hitting the signup endpoint for
+    // the common case. /api/auth/signup re-checks authoritatively (and
+    // race-safely, via the DB's unique index) before actually creating
+    // anything.
+    const { data: existing, error: lookupError } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("username_lower", normalizeUsername(username))
+      .maybeSingle();
+
+    if (lookupError) {
+      setFormError("Something went wrong. Please try again.");
+      setStatus("idle");
+      return;
+    }
+    if (existing) {
+      setFormError("Username already taken.");
+      setStatus("idle");
+      return;
+    }
+
+    const response = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setFormError(data.error ?? "Something went wrong. Please try again.");
+      setStatus("idle");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password,
+    });
+
+    if (error) {
+      setFormError(getAuthErrorMessage(error));
+      setStatus("idle");
+      return;
+    }
+
+    router.push("/dashboard");
+    router.refresh();
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
 
-    const validationError = validate(mode, email, password, confirmPassword);
+    const validationError = validate(mode, username, password, confirmPassword);
     if (validationError) {
       setFormError(validationError);
       return;
@@ -70,47 +157,10 @@ export function AuthForm() {
     const supabase = createSupabaseBrowserClient();
 
     if (mode === "sign-in") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setFormError(getAuthErrorMessage(error));
-        setStatus("idle");
-        return;
-      }
-      router.push("/dashboard");
-      router.refresh();
-      return;
+      await handleSignIn(supabase);
+    } else {
+      await handleSignUp(supabase);
     }
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    });
-
-    if (error) {
-      setFormError(getAuthErrorMessage(error));
-      setStatus("idle");
-      return;
-    }
-
-    // Supabase returns a "success" response with an empty identities array
-    // for a sign-up against an already-registered, already-confirmed email
-    // — deliberate anti-enumeration behavior, not a real new account.
-    if (data.user && data.user.identities && data.user.identities.length === 0) {
-      setFormError("An account with this email already exists. Try signing in instead.");
-      setStatus("idle");
-      return;
-    }
-
-    // If email confirmation is off for this project, signUp() logs the
-    // user in immediately and returns a session.
-    if (data.session) {
-      router.push("/dashboard");
-      router.refresh();
-      return;
-    }
-
-    setStatus("check-email");
   }
 
   return (
@@ -120,86 +170,69 @@ export function AuthForm() {
       </span>
       <h1 className="mt-2 font-sans text-xl font-semibold text-text">VYTAL</h1>
 
-      {status === "check-email" ? (
-        <p className="mt-6 text-sm text-text-dim">
-          Check <span className="text-text">{email}</span> to confirm your
-          account, then sign in.
-        </p>
-      ) : (
-        <>
-          <div className="mt-6 flex gap-2">
-            <button
-              type="button"
-              onClick={() => switchMode("sign-in")}
-              className={mode === "sign-in" ? TAB_ACTIVE : TAB_INACTIVE}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode("sign-up")}
-              className={mode === "sign-up" ? TAB_ACTIVE : TAB_INACTIVE}
-            >
-              Sign Up
-            </button>
-          </div>
+      <div className="mt-6 flex gap-2">
+        <button
+          type="button"
+          onClick={() => switchMode("sign-in")}
+          className={mode === "sign-in" ? TAB_ACTIVE : TAB_INACTIVE}
+        >
+          Sign In
+        </button>
+        <button
+          type="button"
+          onClick={() => switchMode("sign-up")}
+          className={mode === "sign-up" ? TAB_ACTIVE : TAB_INACTIVE}
+        >
+          Sign Up
+        </button>
+      </div>
 
-          <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              className={INPUT_CLASSES}
-            />
+      <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
+        <input
+          type="text"
+          autoComplete="username"
+          required
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          placeholder="Username"
+          className={INPUT_CLASSES}
+        />
+        <input
+          type="password"
+          required
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="Password"
+          className={INPUT_CLASSES}
+        />
+        {mode === "sign-up" && (
+          <>
+            <PasswordRequirementsList password={password} />
             <input
               type="password"
               required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="Confirm password"
               className={INPUT_CLASSES}
             />
-            {mode === "sign-up" && (
-              <>
-                <PasswordRequirementsList password={password} />
-                <input
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  placeholder="Confirm password"
-                  className={INPUT_CLASSES}
-                />
-              </>
-            )}
+          </>
+        )}
 
-            {mode === "sign-in" && (
-              <Link
-                href="/forgot-password"
-                className="self-end font-mono text-xs text-text-dim transition-colors hover:text-text"
-              >
-                Forgot password?
-              </Link>
-            )}
+        <button
+          type="submit"
+          disabled={status === "submitting"}
+          className="mt-1 rounded-full border border-white/15 bg-white/[0.06] px-4 py-2.5 font-mono text-xs uppercase tracking-wide text-text transition-colors hover:bg-white/[0.12] disabled:opacity-50"
+        >
+          {status === "submitting"
+            ? "Please wait…"
+            : mode === "sign-in"
+              ? "Sign in"
+              : "Sign up"}
+        </button>
 
-            <button
-              type="submit"
-              disabled={status === "submitting"}
-              className="mt-1 rounded-full border border-white/15 bg-white/[0.06] px-4 py-2.5 font-mono text-xs uppercase tracking-wide text-text transition-colors hover:bg-white/[0.12] disabled:opacity-50"
-            >
-              {status === "submitting"
-                ? "Please wait…"
-                : mode === "sign-in"
-                  ? "Sign in"
-                  : "Sign up"}
-            </button>
-
-            {formError && <p className="text-sm text-posture">{formError}</p>}
-          </form>
-        </>
-      )}
+        {formError && <p className="text-sm text-posture">{formError}</p>}
+      </form>
     </GlassPanel>
   );
 }
