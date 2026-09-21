@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getAuthErrorMessage } from "@/lib/authErrors";
-import { isValidEmail, isValidPassword, PASSWORD_MIN_LENGTH } from "@/lib/authValidation";
+import { isValidEmail, passwordRequirementsErrorMessage } from "@/lib/authValidation";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { PasswordRequirementsList } from "@/components/auth/PasswordRequirementsList";
 
 type Mode = "sign-in" | "sign-up";
 type Status = "idle" | "submitting" | "check-email";
@@ -28,9 +29,8 @@ function validate(
   if (!isValidEmail(email)) return "Enter a valid email address.";
 
   if (mode === "sign-up") {
-    if (!isValidPassword(password)) {
-      return `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
-    }
+    const passwordError = passwordRequirementsErrorMessage(password);
+    if (passwordError) return passwordError;
     if (password !== confirmPassword) return "Passwords don't match.";
   } else if (password.length === 0) {
     return "Enter your password.";
@@ -162,14 +162,17 @@ export function AuthForm() {
               className={INPUT_CLASSES}
             />
             {mode === "sign-up" && (
-              <input
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Confirm password"
-                className={INPUT_CLASSES}
-              />
+              <>
+                <PasswordRequirementsList password={password} />
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Confirm password"
+                  className={INPUT_CLASSES}
+                />
+              </>
             )}
 
             {mode === "sign-in" && (

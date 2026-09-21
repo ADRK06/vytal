@@ -4,8 +4,9 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getAuthErrorMessage } from "@/lib/authErrors";
-import { isValidPassword, PASSWORD_MIN_LENGTH } from "@/lib/authValidation";
+import { passwordRequirementsErrorMessage } from "@/lib/authValidation";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { PasswordRequirementsList } from "@/components/auth/PasswordRequirementsList";
 
 type Status = "idle" | "submitting" | "done";
 
@@ -22,8 +23,9 @@ export function ResetPasswordForm() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
 
-    if (!isValidPassword(password)) {
-      setFormError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
+    const passwordError = passwordRequirementsErrorMessage(password);
+    if (passwordError) {
+      setFormError(passwordError);
       return;
     }
     if (password !== confirmPassword) {
@@ -71,6 +73,7 @@ export function ResetPasswordForm() {
             placeholder="New password"
             className={INPUT_CLASSES}
           />
+          <PasswordRequirementsList password={password} />
           <input
             type="password"
             required
