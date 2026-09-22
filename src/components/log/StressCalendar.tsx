@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import type { DailyStressPoint } from "@/lib/sessions";
 
 interface StressCalendarProps {
@@ -68,10 +71,20 @@ function formatCellDate(dateKey: string): string {
 export function StressCalendar({ days }: StressCalendarProps) {
   const byDate = new Map(days.map((day) => [day.date, day]));
   const cells = buildCells();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // 53 weeks is wider than the panel on most viewports, and a fresh
+  // overflow-x-auto container starts scrolled to its left edge — without
+  // this, the most recent (rightmost, most useful) week is hidden off
+  // screen by default, which defeats the point of showing it at the right.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="overflow-x-auto pb-2">
+      <div ref={scrollRef} className="overflow-x-auto pb-2">
         <div className="flex gap-1">
           <div className="grid grid-rows-7 gap-1 pr-1">
             {DAY_LABELS.map((label, index) => (
