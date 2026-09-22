@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import { usePostureScore } from "@/hooks/usePostureScore";
 import { usePostureRealtime } from "@/hooks/usePostureRealtime";
 import { useAnimatedNumber } from "@/hooks/useAnimatedNumber";
+import { useSlouchReminder } from "@/hooks/useSlouchReminder";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -23,6 +25,7 @@ export function PostureCard({ sessionId }: PostureCardProps) {
   const { videoRef, status: captureStatus, retry } = usePostureScore(sessionId);
   const { score, status: liveStatus } = usePostureRealtime(sessionId);
   const displayScore = useAnimatedNumber(score ?? 0, { clamp: [0, 100] });
+  const { toastMessage, dismiss } = useSlouchReminder(score);
 
   const isCapturing = captureStatus === "live";
 
@@ -102,6 +105,28 @@ export function PostureCard({ sessionId }: PostureCardProps) {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed bottom-6 left-1/2 z-50 w-[calc(100%-3rem)] max-w-sm -translate-x-1/2"
+          >
+            <GlassPanel className="flex items-start justify-between gap-4 p-4">
+              <p className="text-sm text-text">{toastMessage}</p>
+              <button
+                onClick={dismiss}
+                className="shrink-0 font-mono text-xs uppercase tracking-[0.2em] text-text-dim transition-colors hover:text-text"
+              >
+                Dismiss
+              </button>
+            </GlassPanel>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </GlassPanel>
   );
 }

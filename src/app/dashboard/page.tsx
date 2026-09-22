@@ -4,14 +4,15 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PostureCard } from "@/components/dashboard/PostureCard";
 import { HydrationCard } from "@/components/dashboard/HydrationCard";
+import { StressCard } from "@/components/dashboard/StressCard";
 import { SessionTimer } from "@/components/dashboard/SessionTimer";
+import { SessionActiveIndicator } from "@/components/dashboard/SessionActiveIndicator";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useSession } from "@/hooks/useSession";
 
 const BUTTON_CLASSES =
   "self-start rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 font-mono text-xs uppercase tracking-wide text-text transition-colors hover:bg-white/[0.12]";
 
-// TODO: CorrelationChart.
 export default function DashboardPage() {
   const router = useRouter();
   const { sessionId, status, startSession, endSession } = useSession();
@@ -59,10 +60,13 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
             <PostureCard sessionId={sessionId} />
             <HydrationCard sessionId={sessionId} />
+            <StressCard sessionId={sessionId} />
           </div>
+
+          <SessionActiveIndicator />
         </>
       )}
     </main>

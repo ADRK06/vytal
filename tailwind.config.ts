@@ -8,6 +8,7 @@ const config: Config = {
         background: "#0A0E12",
         hydration: "#5EEAD4",
         posture: "#FF7A59",
+        stress: "#A78BFA",
         text: "#EDF2F1",
         "text-dim": "#8FA0A3",
       },

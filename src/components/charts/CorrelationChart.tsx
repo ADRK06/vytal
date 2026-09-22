@@ -15,26 +15,30 @@ import type { ScorePoint } from "@/lib/sessions";
 interface CorrelationChartProps {
   postureData: ScorePoint[];
   hydrationData: ScorePoint[];
+  stressData: ScorePoint[];
 }
 
 interface MergedPoint {
   t: number;
   posture?: number;
   hydration?: number;
+  stress?: number;
 }
 
 const SERIES = {
   posture: { label: "Posture", color: "#FF7A59" },
   hydration: { label: "Hydration", color: "#5EEAD4" },
+  stress: { label: "Stress", color: "#A78BFA" },
 } as const;
 
-// Both series report on their own independent ~1/sec cadence, so merge them
-// into one timeline (rounded to the nearest second) rather than assuming
-// they land on identical timestamps — Recharts needs one shared data array
-// to drive a synced crosshair/tooltip across both lines.
+// All three series report on their own independent ~1/sec cadence, so
+// merge them into one timeline (rounded to the nearest second) rather
+// than assuming they land on identical timestamps — Recharts needs one
+// shared data array to drive a synced crosshair/tooltip across all lines.
 function mergeSeries(
   postureData: ScorePoint[],
-  hydrationData: ScorePoint[]
+  hydrationData: ScorePoint[],
+  stressData: ScorePoint[]
 ): MergedPoint[] {
   const bysecond = new Map<number, MergedPoint>();
 
@@ -49,6 +53,13 @@ function mergeSeries(
     const t = Math.round(point.elapsedSeconds);
     const entry = bysecond.get(t) ?? { t };
     entry.hydration = point.score;
+    bysecond.set(t, entry);
+  }
+
+  for (const point of stressData) {
+    const t = Math.round(point.elapsedSeconds);
+    const entry = bysecond.get(t) ?? { t };
+    entry.stress = point.score;
     bysecond.set(t, entry);
   }
 
@@ -113,10 +124,11 @@ function ChartLegend() {
 export function CorrelationChart({
   postureData,
   hydrationData,
+  stressData,
 }: CorrelationChartProps) {
   const data = useMemo(
-    () => mergeSeries(postureData, hydrationData),
-    [postureData, hydrationData]
+    () => mergeSeries(postureData, hydrationData, stressData),
+    [postureData, hydrationData, stressData]
   );
 
   return (
@@ -162,6 +174,18 @@ export function CorrelationChart({
             <Line
               dataKey="hydration"
               stroke={SERIES.hydration.color}
+              strokeWidth={2}
+              strokeLinecap="round"
+              dot={false}
+              activeDot={{ r: 4, strokeWidth: 2, stroke: "#0A0E12" }}
+              connectNulls
+              isAnimationActive
+              animationDuration={1100}
+              animationEasing="ease-out"
+            />
+            <Line
+              dataKey="stress"
+              stroke={SERIES.stress.color}
               strokeWidth={2}
               strokeLinecap="round"
               dot={false}

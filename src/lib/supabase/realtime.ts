@@ -7,12 +7,13 @@ import type { LiveScoreCallbacks, LiveScoreSource } from "@/types";
 // posture and hydration use, so ordinary jitter doesn't false-positive.
 const DISCONNECT_TIMEOUT_MS = 10000;
 
-// Backs both PostureCard and HydrationCard: subscribes to Postgres INSERTs
-// on the given table, filtered to the active session, and reports readings
-// plus a connecting/live/disconnected status derived both from the
-// Realtime channel's own state and from how recently a reading arrived.
+// Backs PostureCard, HydrationCard, and StressCard: subscribes to
+// Postgres INSERTs on the given table, filtered to the active session,
+// and reports readings plus a connecting/live/disconnected status
+// derived both from the Realtime channel's own state and from how
+// recently a reading arrived.
 export function createRealtimeScoreSource(
-  table: "posture_readings" | "hydration_readings",
+  table: "posture_readings" | "hydration_readings" | "stress_readings",
   sessionId: string
 ): LiveScoreSource {
   return {

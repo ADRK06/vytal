@@ -23,6 +23,9 @@ const HYDRATION_HOLD_SECONDS = 10;
 // Sampled independently of the 1s countdown tick so the averaged baseline
 // is built from many more readings than just one per displayed second.
 const POSTURE_CAPTURE_SAMPLE_INTERVAL_MS = 400;
+// How long the post-hold summary stays up before auto-advancing — long
+// enough to actually read the numbers, short enough not to feel stuck.
+const SUMMARY_DISPLAY_MS = 2200;
 
 const RETRY_BUTTON_CLASSES =
   "rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 font-mono text-xs uppercase tracking-wide text-text transition-colors hover:bg-white/[0.12]";
@@ -32,12 +35,20 @@ type PostureStatus =
   | "denied"
   | "error"
   | "get-ready"
-  | "hold";
+  | "hold"
+  | "summary";
+
+interface CalibrationSummary {
+  angle: number;
+  sampleCount: number;
+}
 
 function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [status, setStatus] = useState<PostureStatus>("requesting");
   const [secondsLeft, setSecondsLeft] = useState(GET_READY_SECONDS);
+  const [liveAngle, setLiveAngle] = useState<number | null>(null);
+  const [summary, setSummary] = useState<CalibrationSummary | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -45,6 +56,7 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
     let stream: MediaStream | null = null;
     let countdownInterval: ReturnType<typeof setInterval> | undefined;
     let sampleInterval: ReturnType<typeof setInterval> | undefined;
+    let summaryTimeout: ReturnType<typeof setTimeout> | undefined;
 
     async function start() {
       setStatus("requesting");
@@ -111,17 +123,32 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
         }
 
         storePostureBaseline({ neckTorsoAngle: averaged });
-        if (!cancelled) onComplete();
+        if (cancelled) return;
+
+        // A brief confirmation of what was actually recorded, rather than
+        // jumping straight to the next step — the user gets to see the
+        // number their "neutral" position just became.
+        setSummary({ angle: averaged, sampleCount: samples.length });
+        setStatus("summary");
+        summaryTimeout = setTimeout(() => {
+          if (!cancelled) onComplete();
+        }, SUMMARY_DISPLAY_MS);
       }
 
       sampleInterval = setInterval(() => {
-        if (phase !== "hold") return;
         const currentVideo = videoRef.current;
         if (!currentVideo || currentVideo.readyState < 2) return;
 
         const result = landmarker.detectForVideo(currentVideo, performance.now());
         const landmarks = extractPostureLandmarks(result);
-        if (landmarks) samples.push(computeNeckTorsoAngle(landmarks));
+        if (!landmarks) return;
+
+        // Live during get-ready too (so the user can already see and
+        // adjust before the hold starts), but only banked into the
+        // averaged baseline once actually holding.
+        const angle = computeNeckTorsoAngle(landmarks);
+        setLiveAngle(angle);
+        if (phase === "hold") samples.push(angle);
       }, POSTURE_CAPTURE_SAMPLE_INTERVAL_MS);
 
       countdownInterval = setInterval(() => {
@@ -148,20 +175,33 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
       cancelled = true;
       if (countdownInterval) clearInterval(countdownInterval);
       if (sampleInterval) clearInterval(sampleInterval);
+      if (summaryTimeout) clearTimeout(summaryTimeout);
       stream?.getTracks().forEach((track) => track.stop());
     };
   }, [attempt, onComplete]);
 
-  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  const retry = useCallback(() => {
+    setLiveAngle(null);
+    setSummary(null);
+    setAttempt((n) => n + 1);
+  }, []);
+
+  // Visible (mirrored, like looking in a mirror) during get-ready/hold so
+  // the user can actually see themselves to adjust — hidden once summary
+  // begins, since capture is already done by then.
+  const showPreview = status === "get-ready" || status === "hold";
 
   return (
     <div className="flex flex-col items-center gap-4 text-center">
-      {/* Feeds MediaPipe locally; never rendered on screen or sent anywhere. */}
       <video
         ref={videoRef}
         muted
         playsInline
-        className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px"
+        className={
+          showPreview
+            ? "aspect-video w-full max-w-xs -scale-x-100 rounded-2xl border border-white/15 object-cover"
+            : "pointer-events-none absolute -left-[9999px] top-0 h-px w-px"
+        }
       />
 
       <span className="font-mono text-xs uppercase tracking-[0.2em] text-text-dim">
@@ -201,6 +241,11 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
           <span className="font-mono text-5xl font-medium text-posture">
             {secondsLeft}
           </span>
+          {liveAngle !== null && (
+            <span className="font-mono text-xs text-text-dim">
+              Live neck angle: {liveAngle.toFixed(1)}°
+            </span>
+          )}
         </>
       )}
 
@@ -210,7 +255,25 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
           <span className="font-mono text-5xl font-medium text-posture">
             {secondsLeft}
           </span>
+          {liveAngle !== null && (
+            <span className="font-mono text-xs text-text-dim">
+              Live neck angle: {liveAngle.toFixed(1)}°
+            </span>
+          )}
         </>
+      )}
+
+      {status === "summary" && summary && (
+        <div className="flex flex-col items-center gap-2">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-posture" />
+          <p className="text-sm text-text-dim">Baseline captured</p>
+          <p className="font-mono text-2xl font-medium text-posture">
+            {summary.angle.toFixed(1)}° neck angle
+          </p>
+          <p className="font-mono text-xs text-text-dim">
+            {summary.sampleCount} samples averaged
+          </p>
+        </div>
       )}
     </div>
   );

@@ -92,11 +92,56 @@ export function scoreFromDeviation(deviationDegrees: number): number {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+// Vertical gap between the two shoulders, in MediaPipe's normalized (0-1)
+// image coordinates. Unlike the neck-torso angle, this is never baselined
+// against a per-user "upright" capture — level shoulders are the target
+// regardless of camera framing, so raw 0 is always the ideal. Doesn't
+// need hip landmarks either, so it holds up under the same laptop-webcam
+// framing constraint as the primary angle (see PostureLandmarks).
+export function computeShoulderAsymmetry(landmarks: PostureLandmarks): number {
+  return Math.abs(landmarks.leftShoulder.y - landmarks.rightShoulder.y);
+}
+
+// A visibly uneven-shoulder lean is roughly this much vertical gap at
+// typical laptop-webcam framing distance — approximate, like
+// MAX_DEVIATION_DEGREES, and tunable once real posture data comes in.
+const MAX_SHOULDER_ASYMMETRY = 0.08;
+
+// Capped well below the primary angle score's full 0-100 range: shoulder
+// asymmetry is a secondary contributor, so even a badly uneven-shoulder
+// frame should only ever shave points off an otherwise-good angle score,
+// never dominate it or zero it out alone.
+const SHOULDER_ASYMMETRY_MAX_PENALTY = 20;
+
+function shoulderAsymmetryPenalty(asymmetry: number): number {
+  const normalized = Math.min(1, asymmetry / MAX_SHOULDER_ASYMMETRY);
+  // Same flat-near-zero, steep-further-out falloff shape as the primary
+  // score, for the same reason: a little natural asymmetry (nobody sits
+  // perfectly level) shouldn't cost anything.
+  return SHOULDER_ASYMMETRY_MAX_PENALTY * normalized ** 2;
+}
+
+// The single blend both scoring paths funnel through, so they can never
+// drift apart: scorePosture (below) scores directly off fresh landmarks,
+// while usePostureScore scores off a smoothed rolling-window deviation
+// and a separately-smoothed asymmetry — same formula either way.
+export function scoreWithShoulderPenalty(
+  deviationDegrees: number,
+  shoulderAsymmetry: number
+): number {
+  const primaryScore = scoreFromDeviation(deviationDegrees);
+  const penalty = shoulderAsymmetryPenalty(shoulderAsymmetry);
+  return Math.max(0, Math.min(100, Math.round(primaryScore - penalty)));
+}
+
 export function scorePosture(
   landmarks: PostureLandmarks,
   baseline: PostureBaseline
 ): number {
-  return scoreFromDeviation(computeAngleDeviation(landmarks, baseline));
+  return scoreWithShoulderPenalty(
+    computeAngleDeviation(landmarks, baseline),
+    computeShoulderAsymmetry(landmarks)
+  );
 }
 
 export function getStoredPostureBaseline(): PostureBaseline | null {
@@ -173,4 +218,71 @@ export function scoreHydration(rawGsr: number): number {
   const clamped = Math.max(RAW_GSR_MIN, Math.min(RAW_GSR_MAX, rawGsr));
   const score = ((clamped - RAW_GSR_MIN) / (RAW_GSR_MAX - RAW_GSR_MIN)) * 100;
   return Math.round(score);
+}
+
+export interface StressBaseline {
+  /** Resting raw_gsr and raw_ppg readings, captured the same way HydrationBaseline is. */
+  restingGsr: number;
+  restingPpg: number;
+}
+
+const STRESS_BASELINE_STORAGE_KEY = "vytal:stress-baseline";
+
+export function getStoredStressBaseline(): StressBaseline | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STRESS_BASELINE_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as StressBaseline) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function storeStressBaseline(baseline: StressBaseline): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      STRESS_BASELINE_STORAGE_KEY,
+      JSON.stringify(baseline)
+    );
+  } catch {
+    // Ignore storage errors (private browsing, quota, etc.) — the session
+    // just won't have a baseline until the user recalibrates.
+  }
+}
+
+// Placeholder until real calibration data exists, same as scoreHydration
+// above — no stress calibration step exists in the UI yet, so this
+// always has a usable answer via DEFAULT_STRESS_BASELINE rather than
+// requiring one. Physiological direction: skin conductance (GSR) rises
+// with sympathetic arousal, so a higher-than-resting raw_gsr reads as
+// more stressed. raw_ppg is treated the same way, as a scalar proxy for
+// heart-rate elevation — /api/ingest gets one raw_ppg value per tick, not
+// a waveform to detect an actual BPM from, so this assumes the firmware
+// is already sending something roughly proportional to heart rate rather
+// than a raw unprocessed sample.
+const STRESS_ADC_MAX = 4095;
+const DEFAULT_STRESS_BASELINE: StressBaseline = {
+  restingGsr: STRESS_ADC_MAX / 2,
+  restingPpg: STRESS_ADC_MAX / 2,
+};
+
+// 0-1: how far above resting the raw value is, relative to the distance
+// from resting up to whichever ADC bound is farther away — a below-
+// resting reading (calmer than baseline) floors at 0 rather than going
+// negative, since "calmer than resting" isn't a negative stress score.
+function positiveDeviationFraction(raw: number, resting: number): number {
+  const range = Math.max(resting, STRESS_ADC_MAX - resting, 1);
+  return Math.max(0, Math.min(1, (raw - resting) / range));
+}
+
+export function scoreStress(
+  rawGsr: number,
+  rawPpg: number,
+  baseline: StressBaseline = DEFAULT_STRESS_BASELINE
+): number {
+  const gsrStress = positiveDeviationFraction(rawGsr, baseline.restingGsr);
+  const ppgStress = positiveDeviationFraction(rawPpg, baseline.restingPpg);
+  const score = ((gsrStress + ppgStress) / 2) * 100;
+  return Math.max(0, Math.min(100, Math.round(score)));
 }

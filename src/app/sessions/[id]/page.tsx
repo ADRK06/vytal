@@ -59,12 +59,15 @@ export default async function SessionDetailPage({
           </div>
 
           <GlassPanel className="p-8">
-            {session.postureData.length === 0 && session.hydrationData.length === 0 ? (
+            {session.postureData.length === 0 &&
+            session.hydrationData.length === 0 &&
+            session.stressData.length === 0 ? (
               <EmptyState message="No readings recorded for this session." />
             ) : (
               <CorrelationChart
                 postureData={session.postureData}
                 hydrationData={session.hydrationData}
+                stressData={session.stressData}
               />
             )}
           </GlassPanel>

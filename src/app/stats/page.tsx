@@ -38,7 +38,7 @@ export default async function StatsPage() {
 
       {!loadError && stats && stats.completedCount > 0 && (
         <div className="flex flex-col gap-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label="Avg posture"
               value={stats.overallAvgPosture}
@@ -49,6 +49,12 @@ export default async function StatsPage() {
               label="Avg hydration"
               value={stats.overallAvgHydration}
               colorClassName="text-hydration"
+              clamp={[0, 100]}
+            />
+            <StatCard
+              label="Avg stress"
+              value={stats.overallAvgStress}
+              colorClassName="text-stress"
               clamp={[0, 100]}
             />
             <StatCard

@@ -22,11 +22,13 @@ interface TrendPoint {
   label: string;
   posture?: number;
   hydration?: number;
+  stress?: number;
 }
 
 const SERIES = {
   posture: { label: "Posture", color: "#FF7A59" },
   hydration: { label: "Hydration", color: "#5EEAD4" },
+  stress: { label: "Stress", color: "#A78BFA" },
 } as const;
 
 function formatShortDate(iso: string): string {
@@ -49,6 +51,7 @@ function toTrendPoints(sessions: SessionSummary[]): TrendPoint[] {
     label: formatShortDate(session.startedAt),
     posture: session.avgPostureScore ?? undefined,
     hydration: session.avgHydrationScore ?? undefined,
+    stress: session.avgStressScore ?? undefined,
   }));
 }
 
@@ -145,6 +148,18 @@ export function SessionTrendChart({ sessions }: SessionTrendChartProps) {
               strokeWidth={2}
               strokeLinecap="round"
               dot={{ r: 3, strokeWidth: 0, fill: SERIES.hydration.color }}
+              activeDot={{ r: 4, strokeWidth: 2, stroke: "#0A0E12" }}
+              connectNulls
+              isAnimationActive
+              animationDuration={1100}
+              animationEasing="ease-out"
+            />
+            <Line
+              dataKey="stress"
+              stroke={SERIES.stress.color}
+              strokeWidth={2}
+              strokeLinecap="round"
+              dot={{ r: 3, strokeWidth: 0, fill: SERIES.stress.color }}
               activeDot={{ r: 4, strokeWidth: 2, stroke: "#0A0E12" }}
               connectNulls
               isAnimationActive

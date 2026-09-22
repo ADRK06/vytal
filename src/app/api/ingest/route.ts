@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServiceClient } from "@/lib/supabase/service";
-import { scoreHydration } from "@/lib/scoring";
+import { scoreHydration, scoreStress } from "@/lib/scoring";
 
 // Accepts { session_id, raw_gsr, raw_ppg, timestamp } from the ESP32 mouse,
 // runs the hydration scoring function, writes to hydration_readings.
@@ -87,6 +87,7 @@ export async function POST(request: Request) {
 
   const { session_id, raw_gsr, raw_ppg, timestamp } = validation.data;
   const score = scoreHydration(raw_gsr);
+  const stressScore = scoreStress(raw_gsr, raw_ppg);
 
   try {
     const supabase = getSupabaseServiceClient();
@@ -108,7 +109,24 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    return NextResponse.json({ ok: true, id: data.id, score }, { status: 201 });
+    // Same payload, a second pillar — stress rides along with every
+    // hydration reading rather than needing its own ingest call. Kept
+    // non-fatal: the firmware's existing contract is "hydration reading
+    // stored, here's its id/score" (see the module comment above), and a
+    // stress-write hiccup shouldn't turn that into a failure response for
+    // a reading that in fact was stored successfully.
+    const { error: stressError } = await supabase
+      .from("stress_readings")
+      .insert({ session_id, raw_gsr, raw_ppg, timestamp, score: stressScore });
+
+    if (stressError) {
+      console.error("Failed to store stress reading:", stressError);
+    }
+
+    return NextResponse.json(
+      { ok: true, id: data.id, score, stress_score: stressScore },
+      { status: 201 }
+    );
   } catch {
     return NextResponse.json(
       { error: "Failed to store hydration reading" },

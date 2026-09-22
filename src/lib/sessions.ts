@@ -12,6 +12,7 @@ export interface SessionSummary {
   durationSeconds: number | null;
   avgPostureScore: number | null;
   avgHydrationScore: number | null;
+  avgStressScore: number | null;
 }
 
 export interface SessionDetail {
@@ -21,6 +22,7 @@ export interface SessionDetail {
   durationSeconds: number | null;
   postureData: ScorePoint[];
   hydrationData: ScorePoint[];
+  stressData: ScorePoint[];
 }
 
 export interface SessionStats {
@@ -29,7 +31,18 @@ export interface SessionStats {
   sessions: SessionSummary[];
   overallAvgPosture: number | null;
   overallAvgHydration: number | null;
+  overallAvgStress: number | null;
   completedCount: number;
+}
+
+// One cell of the /log calendar heatmap — a day's average stress across
+// all of a user's sessions that day, pre-aggregated in the daily_stress
+// table (kept in sync by a trigger on stress_readings) rather than
+// re-scanned from raw readings on every page load.
+export interface DailyStressPoint {
+  date: string;
+  avgScore: number;
+  readingCount: number;
 }
 
 // If a session has no explicit ended_at and no posture/hydration activity
@@ -125,20 +138,32 @@ export async function getSessions(): Promise<SessionSummary[]> {
 
   const sessionIds = sessions.map((session) => session.id);
 
-  const [{ data: postureReadings, error: postureError }, { data: hydrationReadings, error: hydrationError }] =
-    await Promise.all([
-      supabase.from("posture_readings").select("session_id, score, timestamp").in("session_id", sessionIds),
-      supabase.from("hydration_readings").select("session_id, score, timestamp").in("session_id", sessionIds),
-    ]);
+  const [
+    { data: postureReadings, error: postureError },
+    { data: hydrationReadings, error: hydrationError },
+    { data: stressReadings, error: stressError },
+  ] = await Promise.all([
+    supabase.from("posture_readings").select("session_id, score, timestamp").in("session_id", sessionIds),
+    supabase.from("hydration_readings").select("session_id, score, timestamp").in("session_id", sessionIds),
+    supabase.from("stress_readings").select("session_id, score, timestamp").in("session_id", sessionIds),
+  ]);
 
   if (postureError) throw postureError;
   if (hydrationError) throw hydrationError;
+  // Not fatal like the other two: stress is newer, so a fresh project
+  // that hasn't run supabase/migrations/0005_stress.sql yet would
+  // otherwise break session history/stats entirely just for lacking a
+  // pillar those pages already knew how to render as "no data" before
+  // stress existed. Treated as "no stress data" instead of a load error.
+  if (stressError) console.error("Failed to load stress readings:", stressError);
 
   const postureBySession = groupScoresBySession(postureReadings ?? []);
   const hydrationBySession = groupScoresBySession(hydrationReadings ?? []);
+  const stressBySession = groupScoresBySession(stressReadings ?? []);
   const lastReadingBySession = latestTimestampBySession([
     postureReadings ?? [],
     hydrationReadings ?? [],
+    stressReadings ?? [],
   ]);
 
   return sessions.map((session) => {
@@ -155,6 +180,7 @@ export async function getSessions(): Promise<SessionSummary[]> {
       durationSeconds: computeDurationSeconds(session.started_at, effectiveEndedAt),
       avgPostureScore: average(postureBySession.get(session.id) ?? []),
       avgHydrationScore: average(hydrationBySession.get(session.id) ?? []),
+      avgStressScore: average(stressBySession.get(session.id) ?? []),
     };
   });
 }
@@ -175,11 +201,15 @@ export async function getSessionStats(): Promise<SessionStats> {
   const hydrationScores = completed
     .map((session) => session.avgHydrationScore)
     .filter((score): score is number => score !== null);
+  const stressScores = completed
+    .map((session) => session.avgStressScore)
+    .filter((score): score is number => score !== null);
 
   return {
     sessions: [...completed].reverse(),
     overallAvgPosture: average(postureScores),
     overallAvgHydration: average(hydrationScores),
+    overallAvgStress: average(stressScores),
     completedCount: completed.length,
   };
 }
@@ -199,22 +229,32 @@ export async function getSessionDetail(id: string): Promise<SessionDetail | null
 
   const startedAtMs = new Date(session.started_at).getTime();
 
-  const [{ data: postureReadings, error: postureError }, { data: hydrationReadings, error: hydrationError }] =
-    await Promise.all([
-      supabase
-        .from("posture_readings")
-        .select("timestamp, score")
-        .eq("session_id", id)
-        .order("timestamp", { ascending: true }),
-      supabase
-        .from("hydration_readings")
-        .select("timestamp, score")
-        .eq("session_id", id)
-        .order("timestamp", { ascending: true }),
-    ]);
+  const [
+    { data: postureReadings, error: postureError },
+    { data: hydrationReadings, error: hydrationError },
+    { data: stressReadings, error: stressError },
+  ] = await Promise.all([
+    supabase
+      .from("posture_readings")
+      .select("timestamp, score")
+      .eq("session_id", id)
+      .order("timestamp", { ascending: true }),
+    supabase
+      .from("hydration_readings")
+      .select("timestamp, score")
+      .eq("session_id", id)
+      .order("timestamp", { ascending: true }),
+    supabase
+      .from("stress_readings")
+      .select("timestamp, score")
+      .eq("session_id", id)
+      .order("timestamp", { ascending: true }),
+  ]);
 
   if (postureError) throw postureError;
   if (hydrationError) throw hydrationError;
+  // Same graceful degradation as getSessions() above — see its comment.
+  if (stressError) console.error("Failed to load stress readings:", stressError);
 
   const toScorePoints = (rows: { timestamp: string; score: number }[]): ScorePoint[] =>
     rows.map((row) => ({
@@ -225,6 +265,7 @@ export async function getSessionDetail(id: string): Promise<SessionDetail | null
   const lastReadingAt = latestTimestamp([
     ...(postureReadings ?? []),
     ...(hydrationReadings ?? []),
+    ...(stressReadings ?? []),
   ]);
   const effectiveEndedAt = computeEffectiveEndedAt(
     session.started_at,
@@ -239,7 +280,33 @@ export async function getSessionDetail(id: string): Promise<SessionDetail | null
     durationSeconds: computeDurationSeconds(session.started_at, effectiveEndedAt),
     postureData: toScorePoints(postureReadings ?? []),
     hydrationData: toScorePoints(hydrationReadings ?? []),
+    stressData: toScorePoints(stressReadings ?? []),
   };
+}
+
+// One row per day the signed-in user has a stress reading for, for the
+// /log calendar heatmap. Reads the pre-aggregated daily_stress table
+// (kept current by a trigger on stress_readings — see
+// supabase/migrations/0005_stress.sql) rather than summing raw readings
+// itself, so this stays a single indexed lookup regardless of how much
+// history exists.
+export async function getDailyStress(): Promise<DailyStressPoint[]> {
+  const supabase = createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return [];
+
+  const { data, error } = await supabase
+    .from("daily_stress")
+    .select("date, avg_score, reading_count")
+    .eq("user_id", userData.user.id);
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    date: row.date,
+    avgScore: Math.round(row.avg_score),
+    readingCount: row.reading_count,
+  }));
 }
 
 export function formatSessionDate(iso: string): string {

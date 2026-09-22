@@ -8,9 +8,10 @@ import {
 import {
   computeAngleDeviation,
   computeNeckTorsoAngle,
+  computeShoulderAsymmetry,
   getStoredPostureBaseline,
-  scoreFromDeviation,
   scorePosture,
+  scoreWithShoulderPenalty,
 } from "@/lib/scoring";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -45,6 +46,7 @@ export function usePostureScore(sessionId: string) {
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | undefined;
     const deviationWindow: number[] = [];
+    const asymmetryWindow: number[] = [];
 
     async function start() {
       setStatus("requesting");
@@ -119,6 +121,17 @@ export function usePostureScore(sessionId: string) {
           deviationWindow.reduce((sum, value) => sum + value, 0) /
           deviationWindow.length;
 
+        // Same rolling-window smoothing as the angle deviation above, so
+        // the secondary shoulder-asymmetry penalty doesn't jitter the
+        // score independently of it.
+        const asymmetry = computeShoulderAsymmetry(landmarks);
+        asymmetryWindow.push(asymmetry);
+        if (asymmetryWindow.length > SMOOTHING_WINDOW) asymmetryWindow.shift();
+
+        const smoothedAsymmetry =
+          asymmetryWindow.reduce((sum, value) => sum + value, 0) /
+          asymmetryWindow.length;
+
         // TEMP DEBUG — remove once the score-stuck-at-85-90 issue is diagnosed.
         console.log("[posture debug] landmarks", {
           leftShoulder: landmarks.leftShoulder,
@@ -133,10 +146,11 @@ export function usePostureScore(sessionId: string) {
           "deviation:", deviation.toFixed(2),
           "windowedAvg:", smoothedDeviation.toFixed(2),
           "windowSize:", deviationWindow.length,
+          "shoulderAsymmetry:", asymmetry.toFixed(4),
           "score:", scorePosture(landmarks, baseline)
         );
 
-        const nextScore = scoreFromDeviation(smoothedDeviation);
+        const nextScore = scoreWithShoulderPenalty(smoothedDeviation, smoothedAsymmetry);
         setStatus("live");
 
         // Best-effort, fire-and-forget: this runs once a second in a tight

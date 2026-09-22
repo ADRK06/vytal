@@ -23,6 +23,22 @@ export interface HydrationReading {
   raw_ppg: number;
 }
 
+export interface StressReading {
+  id: string;
+  session_id: string;
+  timestamp: string;
+  score: number;
+  raw_gsr: number;
+  raw_ppg: number;
+}
+
+export interface DailyStress {
+  date: string;
+  user_id: string;
+  avg_score: number;
+  reading_count: number;
+}
+
 // "connecting" == no reading received yet (still waiting on the first
 // one); "disconnected" == readings stopped arriving after being live, or
 // the Realtime channel itself dropped.

@@ -36,6 +36,9 @@ export async function AppHeader() {
             <Link href="/stats" className="transition-colors hover:text-text">
               Stats
             </Link>
+            <Link href="/log" className="transition-colors hover:text-text">
+              Log
+            </Link>
           </nav>
           <SignOutButton />
         </div>
