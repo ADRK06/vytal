@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   extractPostureLandmarks,
   getPoseLandmarker,
+  type PostureLandmarks,
 } from "@/lib/posture/mediapipe";
 import {
   computeAngleDeviation,
@@ -35,12 +36,18 @@ const SMOOTHING_WINDOW = 4;
 // subscription reading the same table back), not local component state.
 // This hook's `status` still covers the capture-specific states (camera
 // permission, missing baseline) that a generic connecting/live/disconnected
-// read-side status can't express.
+// read-side status can't express. It does expose `landmarks` — the raw
+// per-tick detection, for PostureLandmarkOverlay to draw on top of the
+// video preview — since that's presentation, not the persisted score.
 export function usePostureScore(sessionId: string) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<PostureStatus>("requesting");
   const [attempt, setAttempt] = useState(0);
+  // For the landmark overlay (PostureLandmarkOverlay) — kept as the last
+  // known-good detection rather than cleared on a skipped frame, same as
+  // the score itself doesn't reset on one missed tick.
+  const [liveLandmarks, setLiveLandmarks] = useState<PostureLandmarks | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +57,7 @@ export function usePostureScore(sessionId: string) {
 
     async function start() {
       setStatus("requesting");
+      setLiveLandmarks(null);
 
       const baseline = getStoredPostureBaseline();
       if (!baseline) {
@@ -112,6 +120,8 @@ export function usePostureScore(sessionId: string) {
         // landmark's visibility is too low — skip this tick entirely
         // rather than smoothing in an unreliable reading.
         if (!landmarks) return;
+
+        setLiveLandmarks(landmarks);
 
         const deviation = computeAngleDeviation(landmarks, baseline);
         deviationWindow.push(deviation);
@@ -181,5 +191,5 @@ export function usePostureScore(sessionId: string) {
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
-  return { videoRef, status, retry };
+  return { videoRef, status, retry, landmarks: liveLandmarks };
 }

@@ -41,8 +41,15 @@ export function createRealtimeScoreSource(
         }, DISCONNECT_TIMEOUT_MS);
       }
 
+      // Multiple independent readers can subscribe to the same table for
+      // the same session at once now (e.g. a score card and LiveTrendChart
+      // both reading posture_readings) — the Supabase client reuses an
+      // existing channel object for a topic it's already seen, so a
+      // shared `table:sessionId` topic would hand the second subscriber a
+      // channel that's already past `.subscribe()`, and `.on()` throws.
+      // A random suffix keeps every subscribe() call on its own channel.
       const channel = supabase
-        .channel(`${table}:${sessionId}`)
+        .channel(`${table}:${sessionId}:${crypto.randomUUID()}`)
         .on(
           "postgres_changes",
           {

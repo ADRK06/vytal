@@ -13,6 +13,25 @@ const TOAST_DISPLAY_MS = 6000;
 
 const REMINDER_MESSAGE = "You've been slouching for a bit — sit up straight.";
 
+// Wraps `new Notification()` with its own show/error events logged —
+// the constructor itself never throws just because a notification fails
+// to actually display (a denied/blocked permission, an OS-level
+// notification setting, etc. all fail silently otherwise), so without
+// this there is no way to tell "fired and was shown" apart from "fired
+// and vanished" from the console alone.
+function fireNativeNotification(body: string): void {
+  try {
+    const notification = new Notification("VYTAL", { body });
+    notification.onshow = () => console.info("[slouch reminder] native notification shown");
+    notification.onerror = () =>
+      console.error(
+        "[slouch reminder] native notification failed to display — check the OS's own notification settings for this browser"
+      );
+  } catch (error) {
+    console.error("[slouch reminder] Notification constructor threw:", error);
+  }
+}
+
 // Watches the live posture score and, once it's stayed continuously below
 // SLOUCH_THRESHOLD for SUSTAINED_MS, fires a reminder: a browser
 // Notification if permission has been granted (requested lazily, only
@@ -45,18 +64,22 @@ export function useSlouchReminder(score: number | null) {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     toastTimeoutRef.current = setTimeout(() => setToastMessage(null), TOAST_DISPLAY_MS);
 
-    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      console.warn("[slouch reminder] Notification API unavailable in this browser");
+      return;
+    }
 
     if (Notification.permission === "granted") {
-      new Notification("VYTAL", { body: REMINDER_MESSAGE });
-    } else if (Notification.permission === "default" && !permissionRequestedRef.current) {
+      fireNativeNotification(REMINDER_MESSAGE);
+    } else if (Notification.permission === "denied") {
+      console.info("[slouch reminder] Notification permission denied — toast only");
+    } else if (!permissionRequestedRef.current) {
       // Only asked the first time a slouch is actually sustained — not on
       // page load, so the permission prompt has an obvious reason.
       permissionRequestedRef.current = true;
       Notification.requestPermission().then((permission) => {
-        if (permission === "granted") {
-          new Notification("VYTAL", { body: REMINDER_MESSAGE });
-        }
+        console.info("[slouch reminder] Notification.requestPermission() resolved:", permission);
+        if (permission === "granted") fireNativeNotification(REMINDER_MESSAGE);
       });
     }
   }, [score]);

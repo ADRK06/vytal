@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PostureCard } from "@/components/dashboard/PostureCard";
 import { HydrationCard } from "@/components/dashboard/HydrationCard";
 import { StressCard } from "@/components/dashboard/StressCard";
+import { LiveTrendChart } from "@/components/dashboard/LiveTrendChart";
 import { SessionTimer } from "@/components/dashboard/SessionTimer";
 import { SessionActiveIndicator } from "@/components/dashboard/SessionActiveIndicator";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -64,6 +65,10 @@ export default function DashboardPage() {
             <PostureCard sessionId={sessionId} />
             <HydrationCard sessionId={sessionId} />
             <StressCard sessionId={sessionId} />
+          </div>
+
+          <div className="mt-6">
+            <LiveTrendChart sessionId={sessionId} />
           </div>
 
           <SessionActiveIndicator />

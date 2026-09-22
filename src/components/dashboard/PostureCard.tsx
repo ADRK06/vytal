@@ -6,8 +6,10 @@ import { usePostureScore } from "@/hooks/usePostureScore";
 import { usePostureRealtime } from "@/hooks/usePostureRealtime";
 import { useAnimatedNumber } from "@/hooks/useAnimatedNumber";
 import { useSlouchReminder } from "@/hooks/useSlouchReminder";
+import { useVideoAspectRatio } from "@/hooks/useVideoAspectRatio";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PostureLandmarkOverlay } from "@/components/posture/PostureLandmarkOverlay";
 
 const RETRY_BUTTON_CLASSES =
   "self-start rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 font-mono text-xs uppercase tracking-wide text-text transition-colors hover:bg-white/[0.12]";
@@ -22,23 +24,16 @@ export function PostureCard({ sessionId }: PostureCardProps) {
   // posture_readings, while usePostureRealtime reads the score back from
   // Supabase — so what's on screen always reflects the database, the same
   // way HydrationCard already works.
-  const { videoRef, status: captureStatus, retry } = usePostureScore(sessionId);
+  const { videoRef, status: captureStatus, retry, landmarks } = usePostureScore(sessionId);
   const { score, status: liveStatus } = usePostureRealtime(sessionId);
   const displayScore = useAnimatedNumber(score ?? 0, { clamp: [0, 100] });
   const { toastMessage, dismiss } = useSlouchReminder(score);
+  const aspectRatio = useVideoAspectRatio(videoRef);
 
   const isCapturing = captureStatus === "live";
 
   return (
     <GlassPanel className="relative p-8">
-      {/* Feeds MediaPipe locally; never rendered on screen or sent anywhere. */}
-      <video
-        ref={videoRef}
-        muted
-        playsInline
-        className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px"
-      />
-
       <div className="flex items-center justify-between">
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-text-dim">
           Posture
@@ -49,6 +44,31 @@ export function PostureCard({ sessionId }: PostureCardProps) {
             Live
           </span>
         )}
+      </div>
+
+      {/* Visible (mirrored, like looking in a mirror) whenever the camera
+          is actually running, with the same landmark overlay calibration
+          uses — so what's being tracked during a live session is never a
+          mystery, not just during the one-time calibration flow. Kept at
+          1x1px off-screen (not display:none or 0x0) the rest of the time,
+          same as before — some browsers throttle decoding for elements
+          that are truly zero-size or hidden, and detection must keep
+          running regardless of whether the preview itself is shown. */}
+      <div
+        className={
+          isCapturing
+            ? "relative mt-4 w-full overflow-hidden rounded-2xl border border-white/15"
+            : "pointer-events-none absolute -left-[9999px] top-0 h-px w-px overflow-hidden"
+        }
+        style={isCapturing ? { aspectRatio } : undefined}
+      >
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          className="h-full w-full -scale-x-100 object-cover"
+        />
+        {isCapturing && <PostureLandmarkOverlay landmarks={landmarks} />}
       </div>
 
       <div className="mt-6">

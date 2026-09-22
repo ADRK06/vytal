@@ -5,9 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PostureLandmarkOverlay } from "@/components/posture/PostureLandmarkOverlay";
+import { useVideoAspectRatio } from "@/hooks/useVideoAspectRatio";
 import {
   extractPostureLandmarks,
   getPoseLandmarker,
+  type PostureLandmarks,
 } from "@/lib/posture/mediapipe";
 import {
   captureHydrationBaseline,
@@ -48,8 +51,10 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
   const [status, setStatus] = useState<PostureStatus>("requesting");
   const [secondsLeft, setSecondsLeft] = useState(GET_READY_SECONDS);
   const [liveAngle, setLiveAngle] = useState<number | null>(null);
+  const [liveLandmarks, setLiveLandmarks] = useState<PostureLandmarks | null>(null);
   const [summary, setSummary] = useState<CalibrationSummary | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const aspectRatio = useVideoAspectRatio(videoRef);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,6 +153,7 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
         // averaged baseline once actually holding.
         const angle = computeNeckTorsoAngle(landmarks);
         setLiveAngle(angle);
+        setLiveLandmarks(landmarks);
         if (phase === "hold") samples.push(angle);
       }, POSTURE_CAPTURE_SAMPLE_INTERVAL_MS);
 
@@ -182,6 +188,7 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
 
   const retry = useCallback(() => {
     setLiveAngle(null);
+    setLiveLandmarks(null);
     setSummary(null);
     setAttempt((n) => n + 1);
   }, []);
@@ -193,16 +200,22 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="flex flex-col items-center gap-4 text-center">
-      <video
-        ref={videoRef}
-        muted
-        playsInline
+      <div
         className={
           showPreview
-            ? "aspect-video w-full max-w-xs -scale-x-100 rounded-2xl border border-white/15 object-cover"
-            : "pointer-events-none absolute -left-[9999px] top-0 h-px w-px"
+            ? "relative w-full max-w-xs overflow-hidden rounded-2xl border border-white/15"
+            : "pointer-events-none absolute -left-[9999px] top-0 h-px w-px overflow-hidden"
         }
-      />
+        style={showPreview ? { aspectRatio } : undefined}
+      >
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          className="h-full w-full -scale-x-100 object-cover"
+        />
+        {showPreview && <PostureLandmarkOverlay landmarks={liveLandmarks} />}
+      </div>
 
       <span className="font-mono text-xs uppercase tracking-[0.2em] text-text-dim">
         Step 1 of 2 — Posture
