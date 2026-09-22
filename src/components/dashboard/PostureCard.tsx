@@ -33,7 +33,7 @@ export function PostureCard({ sessionId }: PostureCardProps) {
   const isCapturing = captureStatus === "live";
 
   return (
-    <GlassPanel className="relative p-8">
+    <GlassPanel className="relative p-8 lg:p-10">
       <div className="flex items-center justify-between">
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-text-dim">
           Posture
@@ -113,7 +113,7 @@ export function PostureCard({ sessionId }: PostureCardProps) {
 
         {isCapturing && liveStatus === "live" && score !== null && (
           <div>
-            <span className="font-mono text-4xl font-medium text-posture">
+            <span className="font-mono text-4xl font-medium text-posture lg:text-5xl">
               {displayScore}
             </span>
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">

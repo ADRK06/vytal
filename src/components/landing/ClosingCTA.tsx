@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ScrollReveal } from "./ScrollReveal";
 import { GradientBorderButton } from "./GradientBorderButton";
+import { Magnetic } from "./Magnetic";
 
 interface ClosingCTAProps {
   isLoggedIn: boolean;
@@ -26,7 +27,7 @@ export function ClosingCTA({ isLoggedIn }: ClosingCTAProps) {
           style={{ animation: "blob-drift 26s ease-in-out infinite reverse" }}
         />
         <div
-          className="absolute bottom-[-15%] left-[35%] h-[460px] w-[460px] rounded-full bg-posture/15 blur-[130px]"
+          className="absolute bottom-[-15%] left-[35%] h-[460px] w-[460px] rounded-full bg-stress/15 blur-[130px]"
           style={{ animation: "blob-drift 30s ease-in-out infinite" }}
         />
       </div>
@@ -43,16 +44,18 @@ export function ClosingCTA({ isLoggedIn }: ClosingCTAProps) {
 
       <ScrollReveal className="mx-auto flex max-w-3xl flex-col items-center gap-8 px-6 text-center sm:px-10 lg:px-16">
         <h2 className="font-sans text-4xl font-semibold leading-tight text-text sm:text-5xl">
-          Sit better. Drink more.{" "}
-          <span className="text-posture">See</span> the{" "}
-          <span className="text-hydration">difference</span>.
+          Sit <span className="text-posture">better</span>. Drink{" "}
+          <span className="text-hydration">more</span>. Stress{" "}
+          <span className="text-stress">less</span>.
         </h2>
         <p className="max-w-md font-sans text-base text-text-dim sm:text-lg">
           Free to start. All you need is a webcam and a VYTAL sensing mouse.
         </p>
-        <GradientBorderButton href={ctaHref}>
-          {isLoggedIn ? "Go to dashboard" : "Get started free"}
-        </GradientBorderButton>
+        <Magnetic>
+          <GradientBorderButton href={ctaHref}>
+            {isLoggedIn ? "Go to dashboard" : "Get started free"}
+          </GradientBorderButton>
+        </Magnetic>
       </ScrollReveal>
 
       <footer className="relative mx-auto mt-32 flex max-w-6xl flex-col items-center gap-3 px-6 font-mono text-xs uppercase tracking-[0.2em] text-text-dim sm:flex-row sm:justify-between sm:px-10 lg:px-16">

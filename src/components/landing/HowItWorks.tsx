@@ -1,8 +1,13 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { useRef } from "react";
+import { motion, useReducedMotion, useScroll, type MotionValue } from "framer-motion";
 import { ScrollEmphasisStep } from "./ScrollEmphasisStep";
 import {
   PostureIllustration,
   HydrationIllustration,
+  StressIllustration,
   DashboardIllustration,
 } from "./Illustrations";
 
@@ -12,10 +17,27 @@ interface Step {
   body: string;
   illustration: ReactNode;
   // "neutral" for anything that isn't specifically about one signal (the
-  // unified dashboard covers both) — posture/hydration's colors are
-  // reserved for content that's actually about that one metric.
-  accent: "posture" | "hydration" | "neutral";
+  // unified dashboard covers all three) — the pillar colors are reserved
+  // for content that's actually about that one metric.
+  accent: "posture" | "hydration" | "stress" | "neutral";
 }
+
+const ACCENT_TEXT_CLASS: Record<Step["accent"], string> = {
+  posture: "text-posture",
+  hydration: "text-hydration",
+  stress: "text-stress",
+  neutral: "text-text-dim",
+};
+
+// Matches each step's accent, in order — feeds the connecting line's
+// gradient so the drawn path visually hands off from one pillar's color to
+// the next as it reaches that step.
+const ACCENT_HEX: Record<Step["accent"], string> = {
+  posture: "#FF7A59",
+  hydration: "#5EEAD4",
+  stress: "#A78BFA",
+  neutral: "#8FA0A3",
+};
 
 const STEPS: Step[] = [
   {
@@ -33,17 +55,93 @@ const STEPS: Step[] = [
     accent: "hydration",
   },
   {
-    eyebrow: "03 — Dashboard",
-    title: "One dashboard, both signals, correlated.",
-    body: "Posture and hydration scores land on the same live timeline, so you can actually see how one affects the other over the course of a session — not just two disconnected numbers.",
+    eyebrow: "03 — Stress",
+    title: "The same sensors also read your stress.",
+    body: "Those same GSR and PPG readings get scored a second way — as deviation from your own resting baseline — so stress shows up alongside hydration with no extra hardware.",
+    illustration: <StressIllustration />,
+    accent: "stress",
+  },
+  {
+    eyebrow: "04 — Dashboard",
+    title: "One dashboard, three signals, correlated.",
+    body: "Posture, hydration, and stress scores land on the same live timeline, so you can actually see how they move together over a session — not just three disconnected numbers.",
     illustration: <DashboardIllustration />,
     accent: "neutral",
   },
 ];
 
-export function HowItWorks() {
+// A thin gradient line that draws itself down through the steps as the
+// section scrolls (pathLength driven straight off scroll progress, a
+// MotionValue Framer updates without a React re-render per tick). Percentage
+// viewBox + preserveAspectRatio="none", same technique as
+// PostureLandmarkOverlay, so it stretches to the section's real height
+// without measuring anything in JS. Desktop-only (lg:block) since it's
+// keyed to the two-column zigzag layout that only exists at that width —
+// on a single stacked mobile column it wouldn't read as "linking" anything.
+function ConnectingLine({ progress }: { progress: MotionValue<number> }) {
+  const stops = STEPS.map((step, index) => (
+    <stop
+      key={step.eyebrow}
+      offset={`${(index / (STEPS.length - 1)) * 100}%`}
+      stopColor={ACCENT_HEX[step.accent]}
+    />
+  ));
+
   return (
-    <section className="mx-auto flex max-w-6xl flex-col gap-24 px-6 py-24 sm:px-10 lg:px-16">
+    <svg
+      aria-hidden
+      viewBox="0 0 2 100"
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-y-0 left-1/2 hidden h-full w-[2px] -translate-x-1/2 lg:block"
+    >
+      <defs>
+        <linearGradient id="how-it-works-line" x1="0" y1="0" x2="0" y2="1">
+          {stops}
+        </linearGradient>
+      </defs>
+      <path
+        d="M1 1 L1 99"
+        stroke="rgba(255,255,255,0.08)"
+        strokeWidth={2}
+        vectorEffect="non-scaling-stroke"
+      />
+      <motion.path
+        d="M1 1 L1 99"
+        stroke="url(#how-it-works-line)"
+        strokeWidth={2}
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+        style={{ pathLength: progress }}
+      />
+      {STEPS.map((step, index) => (
+        <circle
+          key={step.eyebrow}
+          cx={1}
+          cy={4 + (92 / (STEPS.length - 1)) * index}
+          r={2.5}
+          fill={ACCENT_HEX[step.accent]}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+    </svg>
+  );
+}
+
+export function HowItWorks() {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const prefersReducedMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start center", "end center"],
+  });
+
+  return (
+    <section
+      ref={sectionRef}
+      className="relative mx-auto flex max-w-6xl flex-col gap-24 px-6 py-24 sm:px-10 lg:px-16"
+    >
+      {!prefersReducedMotion && <ConnectingLine progress={scrollYProgress} />}
+
       {STEPS.map((step, index) => (
         <ScrollEmphasisStep key={step.title}>
           <div
@@ -53,13 +151,7 @@ export function HowItWorks() {
           >
             <div className="flex flex-col gap-4">
               <span
-                className={`font-mono text-xs uppercase tracking-[0.2em] ${
-                  step.accent === "posture"
-                    ? "text-posture"
-                    : step.accent === "hydration"
-                      ? "text-hydration"
-                      : "text-text-dim"
-                }`}
+                className={`font-mono text-xs uppercase tracking-[0.2em] ${ACCENT_TEXT_CLASS[step.accent]}`}
               >
                 {step.eyebrow}
               </span>

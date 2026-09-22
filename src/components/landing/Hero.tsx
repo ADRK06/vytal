@@ -1,8 +1,10 @@
 "use client";
 
-import { motion, Variants } from "framer-motion";
+import { useRef } from "react";
+import { motion, useReducedMotion, useScroll, useTransform, Variants } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { LiquidGlassButton } from "./LiquidGlassButton";
+import { Magnetic } from "./Magnetic";
 
 // Single orchestrated load-in: the whole hero staggers in once, no
 // per-element hover/fade animations layered on top of it.
@@ -31,13 +33,31 @@ interface HeroProps {
 
 export function Hero({ isLoggedIn }: HeroProps) {
   const ctaHref = isLoggedIn ? "/dashboard" : "/login";
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const prefersReducedMotion = useReducedMotion();
+
+  // Parallax depth: the blobs are a child of the section's own scroll
+  // transit (start start -> end start), and get pushed back down by a
+  // fraction of that transit — so as the section scrolls up at its normal
+  // 1x rate, the blobs net out moving slower, reading as "further back"
+  // than the foreground text, which has no counter-transform of its own.
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start start", "end start"],
+  });
+  const blobY = useTransform(scrollYProgress, [0, 1], prefersReducedMotion ? [0, 0] : [0, 140]);
 
   return (
-    <section className="relative overflow-hidden px-6 py-24 sm:px-10 lg:px-16">
-      {/* Slow, continuous liquid gradient — pure CSS (not Framer Motion,
-          not interactive), sits behind the content at low opacity so the
-          headline and panel stay fully readable on top of it. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+    <section ref={sectionRef} className="relative overflow-hidden px-6 py-24 sm:px-10 lg:px-16">
+      {/* Slow, continuous liquid gradient — pure CSS morph (not Framer
+          Motion), sits behind the content at low opacity so the headline
+          and panel stay fully readable on top of it. The outer motion.div
+          only adds the scroll-linked parallax offset on top of that. */}
+      <motion.div
+        aria-hidden
+        style={{ y: blobY }}
+        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      >
         <div
           className="absolute -left-[15%] -top-[20%] h-[520px] w-[520px] bg-hydration/20 blur-[120px]"
           style={{ animation: "liquid-morph 26s ease-in-out infinite" }}
@@ -47,10 +67,10 @@ export function Hero({ isLoggedIn }: HeroProps) {
           style={{ animation: "liquid-morph 32s ease-in-out infinite reverse" }}
         />
         <div
-          className="absolute bottom-[-25%] left-[20%] h-[480px] w-[480px] bg-hydration/10 blur-[140px]"
+          className="absolute bottom-[-25%] left-[20%] h-[480px] w-[480px] bg-stress/12 blur-[140px]"
           style={{ animation: "liquid-morph 38s ease-in-out infinite" }}
         />
-      </div>
+      </motion.div>
 
       <motion.div
         variants={container}
@@ -70,21 +90,24 @@ export function Hero({ isLoggedIn }: HeroProps) {
             variants={item}
             className="font-sans text-4xl font-semibold leading-tight text-text sm:text-5xl lg:text-6xl"
           >
-            Sense your <span className="text-posture">posture</span> and{" "}
-            <span className="text-hydration">hydration</span>, in real time.
+            Sense your <span className="text-posture">posture</span>,{" "}
+            <span className="text-hydration">hydration</span>, and{" "}
+            <span className="text-stress">stress</span> — in real time.
           </motion.h1>
 
           <motion.p
             variants={item}
             className="max-w-md font-sans text-base text-text-dim sm:text-lg"
           >
-            VYTAL reads your posture from your webcam and your hydration from
-            a sensing mouse, then scores both live on one dashboard — no
-            video ever leaves your browser.
+            VYTAL reads your posture from your webcam, and your hydration and
+            stress from a sensing mouse, then scores all three live on one
+            dashboard — no video ever leaves your browser.
           </motion.p>
 
           <motion.div variants={item}>
-            <LiquidGlassButton href={ctaHref}>Start a session</LiquidGlassButton>
+            <Magnetic className="inline-block">
+              <LiquidGlassButton href={ctaHref}>Start a session</LiquidGlassButton>
+            </Magnetic>
           </motion.div>
         </div>
 
@@ -129,6 +152,20 @@ export function Hero({ isLoggedIn }: HeroProps) {
                 </div>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                   <div className="h-full w-[64%] rounded-full bg-hydration" />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-baseline justify-between">
+                  <span className="font-mono text-xs uppercase tracking-[0.2em] text-text-dim">
+                    Stress
+                  </span>
+                  <span className="font-mono text-3xl font-medium text-stress">
+                    22
+                  </span>
+                </div>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full w-[22%] rounded-full bg-stress" />
                 </div>
               </div>
             </div>

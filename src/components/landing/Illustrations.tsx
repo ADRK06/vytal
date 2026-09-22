@@ -74,6 +74,31 @@ export function HydrationIllustration() {
   );
 }
 
+export function StressIllustration() {
+  return (
+    <svg viewBox="0 0 240 200" className="h-full w-full" fill="none" aria-hidden>
+      {/* Resting baseline — stress is scored as deviation from this, the
+          same way the hydration waveform is a raw reading rather than a
+          deviation, so the reference line is what visually distinguishes
+          the two even though both ride on the same GSR/PPG signal. */}
+      <line x1="20" y1="112" x2="220" y2="112" stroke="currentColor" className="text-text-dim" strokeWidth={1} strokeDasharray="3 4" />
+
+      {/* GSR/PPG trace, spiking away from resting */}
+      <path
+        d="M20 112 46 112 58 80 70 138 82 112 106 112 118 58 126 152 134 96 146 112 168 112 180 84 192 130 204 112 220 112"
+        className="stroke-stress"
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Deviation highlight, echoing the correlation circle in
+          DashboardIllustration */}
+      <circle cx="126" cy="152" r="13" stroke="currentColor" className="text-text-dim" strokeWidth={1} strokeDasharray="3 4" />
+    </svg>
+  );
+}
+
 export function DashboardIllustration() {
   return (
     <svg viewBox="0 0 240 200" className="h-full w-full" fill="none" aria-hidden>
@@ -98,8 +123,17 @@ export function DashboardIllustration() {
         strokeLinejoin="round"
       />
 
-      {/* Correlation highlight, where the two traces converge */}
-      <circle cx="144" cy="88" r="13" stroke="currentColor" className="text-text-dim" strokeWidth={1} strokeDasharray="3 4" />
+      {/* Stress trace */}
+      <path
+        d="M24 160 64 148 104 124 144 132 184 100 216 96"
+        className="stroke-stress"
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Correlation highlight, where the traces converge */}
+      <circle cx="144" cy="98" r="13" stroke="currentColor" className="text-text-dim" strokeWidth={1} strokeDasharray="3 4" />
     </svg>
   );
 }

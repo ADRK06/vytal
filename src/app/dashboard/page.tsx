@@ -61,10 +61,17 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          {/* Posture is the featured, camera-carrying card — it gets the
+              wide column so the video + landmark overlay actually has room
+              to breathe; hydration/stress are smaller companions stacked
+              beside it, matching the same proportions on tablet (side by
+              side under the featured card) down to mobile (fully stacked). */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
             <PostureCard sessionId={sessionId} />
-            <HydrationCard sessionId={sessionId} />
-            <StressCard sessionId={sessionId} />
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-1">
+              <HydrationCard sessionId={sessionId} />
+              <StressCard sessionId={sessionId} />
+            </div>
           </div>
 
           <div className="mt-6">
