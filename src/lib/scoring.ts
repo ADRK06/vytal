@@ -1,27 +1,48 @@
 import type { Point2D, PostureLandmarks } from "./posture/mediapipe";
 
 export interface PostureBaseline {
-  /** Degrees between the shoulder->ear vector and the shoulder line's own perpendicular, captured while sitting upright. */
-  neckTorsoAngle: number;
+  /** Craniovertebral angle (degrees from horizontal), captured while sitting upright. */
+  craniovertebralAngle: number;
 }
 
 const POSTURE_BASELINE_STORAGE_KEY = "vytal:posture-baseline";
 
-// A neck-torso angle at or beyond this many degrees from baseline scores 0.
+// A CVA deviation at or beyond this many degrees from baseline scores 0.
 // The falloff is quadratic (see scorePosture), not linear: a straight-line
 // falloff can't fit "barely penalize a few degrees of natural movement" and
 // "a ~10° slouch should feel like a real drop" at the same time — no single
 // divisor gets both a 3° deviation into the 90s and a 10° deviation down to
 // ~40. Squaring the normalized deviation keeps the curve flat near 0 and
 // steep in the middle, matching how a slouch actually feels.
+//
+// This constant carries over unchanged from the old shoulder-perpendicular
+// method rather than being picked fresh: verified via synthetic data (see
+// the CVA computation below) that for a fixed physical head rotation, the
+// raw shoulder->ear vector rotates by the same number of degrees regardless
+// of which fixed reference (the shoulder line's perpendicular, or plain
+// horizontal) that rotation is measured against — a reference is just an
+// additive offset, not a scale factor, as long as the shoulders themselves
+// aren't also rotating between baseline and live reads. So "how many
+// degrees of raw deviation a given real slouch produces" doesn't change
+// with the switch; what changes is that CVA's absolute value (~45-55°
+// normal, per the clinical literature) no longer reads near 0° the way the
+// old angle did, which only matters for the *display* value, not this
+// deviation-based curve.
 const MAX_DEVIATION_DEGREES = 13;
 
 function midpoint(a: Point2D, b: Point2D): Point2D {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
-function angleBetween(from: Point2D, to: Point2D): number {
-  return (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI;
+// Angle, in degrees, of the vector from `from` to `to`, measured from
+// horizontal with "up" as positive. Image coordinates put y=0 at the top
+// and increase downward, so dy is flipped here — otherwise a point
+// directly above `from` would read as -90° instead of the +90° you'd
+// expect looking at this on paper.
+function angleFromHorizontal(from: Point2D, to: Point2D): number {
+  const dx = to.x - from.x;
+  const dy = from.y - to.y;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
 }
 
 // Keeps an angle difference in (-180, 180] so deviations near the wrap
@@ -33,54 +54,48 @@ function normalizeAngleDelta(delta: number): number {
   return normalized;
 }
 
-// The perpendicular to the shoulder line that points "up" (toward the top
-// of the frame). There are two perpendiculars to any line; this picks
-// whichever one is closer to straight up, so it doesn't matter which
-// shoulder lands on which side of the image.
-function shoulderUpAngle(leftShoulder: Point2D, rightShoulder: Point2D): number {
-  const shoulderLineAngle = angleBetween(leftShoulder, rightShoulder);
-  const candidateA = normalizeAngleDelta(shoulderLineAngle + 90);
-  const candidateB = normalizeAngleDelta(shoulderLineAngle - 90);
-  const distanceFromUp = (angle: number) => Math.abs(normalizeAngleDelta(angle + 90));
-  return distanceFromUp(candidateA) <= distanceFromUp(candidateB) ? candidateA : candidateB;
-}
-
-// The angle between the neck (shoulder midpoint -> ear midpoint) and the
-// shoulder line's own perpendicular. Using the shoulder line as the
-// reference axis — rather than assuming the camera's vertical is "up", or
-// requiring hips — keeps the score stable if the webcam is slightly tilted,
-// and works with typical laptop/monitor webcam framing, where hips are
-// essentially never visible (they're below desk level). Hip landmarks are
-// still extracted when available (see PostureLandmarks) but intentionally
-// don't feed into this formula: mixing a hip-referenced angle into some
-// samples and a shoulder-only one into others would make baseline and live
-// readings inconsistent depending on which happened to be visible when.
-export function computeNeckTorsoAngle(landmarks: PostureLandmarks): number {
+// Craniovertebral angle (CVA): the standard clinical measure of
+// forward-head posture — the angle, from horizontal, between the shoulder
+// midpoint and the ear midpoint. Normal CVA is roughly 45-55°; a
+// meaningfully lower angle indicates a forward-head/slouched position.
+// Averaging left+right into a midpoint on both ends (rather than reading
+// off one side) cancels out a person turning slightly toward one shoulder.
+//
+// This replaces the previous neck-torso angle, which referenced the
+// shoulder line's own perpendicular instead of fixed horizontal — robust to
+// a tilted camera mount, but sensitive to the torso/shoulders rotating even
+// when the head/neck posture itself hasn't changed (e.g. leaning toward a
+// second monitor). Referencing horizontal removes that shoulder-rotation
+// noise. The tradeoff runs the other way: a genuinely tilted camera now
+// biases the raw angle. That's fine here, since scoring only ever uses the
+// *deviation* from a baseline captured on that same camera (see
+// computeAngleDeviation), which cancels a constant tilt out.
+//
+// Still requires no hip landmarks, consistent with PostureLandmarks: hips
+// are essentially never visible at typical laptop/monitor webcam framing
+// (they're below desk level), and this formula doesn't need them.
+export function computeCraniovertebralAngle(landmarks: PostureLandmarks): number {
   const shoulderMid = midpoint(landmarks.leftShoulder, landmarks.rightShoulder);
   const earMid = midpoint(landmarks.leftEar, landmarks.rightEar);
-
-  const neckAngle = angleBetween(shoulderMid, earMid);
-  const torsoAngle = shoulderUpAngle(landmarks.leftShoulder, landmarks.rightShoulder);
-
-  return normalizeAngleDelta(neckAngle - torsoAngle);
+  return angleFromHorizontal(shoulderMid, earMid);
 }
 
 export function capturePostureBaseline(
   landmarks: PostureLandmarks
 ): PostureBaseline {
-  return { neckTorsoAngle: computeNeckTorsoAngle(landmarks) };
+  return { craniovertebralAngle: computeCraniovertebralAngle(landmarks) };
 }
 
-// The neck-torso angle deviation from baseline, normalized into (-180, 180].
-// Exposed separately from scoreFromDeviation so callers that sample
-// repeatedly (usePostureScore) can smooth this raw number over several
-// frames before ever converting it to a score.
+// The CVA deviation from baseline, normalized into (-180, 180]. Exposed
+// separately from scoreFromDeviation so callers that sample repeatedly
+// (usePostureScore) can smooth this raw number over several frames before
+// ever converting it to a score.
 export function computeAngleDeviation(
   landmarks: PostureLandmarks,
   baseline: PostureBaseline
 ): number {
   return normalizeAngleDelta(
-    computeNeckTorsoAngle(landmarks) - baseline.neckTorsoAngle
+    computeCraniovertebralAngle(landmarks) - baseline.craniovertebralAngle
   );
 }
 
@@ -93,8 +108,8 @@ export function scoreFromDeviation(deviationDegrees: number): number {
 }
 
 // Vertical gap between the two shoulders, in MediaPipe's normalized (0-1)
-// image coordinates. Unlike the neck-torso angle, this is never baselined
-// against a per-user "upright" capture — level shoulders are the target
+// image coordinates. Unlike the CVA, this is never baselined against a
+// per-user "upright" capture — level shoulders are the target
 // regardless of camera framing, so raw 0 is always the ideal. Doesn't
 // need hip landmarks either, so it holds up under the same laptop-webcam
 // framing constraint as the primary angle (see PostureLandmarks).
@@ -141,6 +156,37 @@ export function scorePosture(
   return scoreWithShoulderPenalty(
     computeAngleDeviation(landmarks, baseline),
     computeShoulderAsymmetry(landmarks)
+  );
+}
+
+// Sustained-slouch debouncing: how far below the calibrated CVA baseline
+// (in degrees) counts as "bad", and how many consecutive valid readings at
+// or beyond that threshold are required before flagging it as sustained —
+// a single noisy or momentarily-occluded frame (reaching for a coffee cup,
+// a cough) shouldn't fire a notification. posture_readings gets one write
+// per second (see usePostureScore's SAMPLE_INTERVAL_MS), so this default
+// works out to roughly 15 seconds of continuous slouching, in the same
+// ballpark as the reminder's previous 18-second wall-clock window.
+export const SLOUCH_CVA_THRESHOLD_DEGREES = 6;
+export const SLOUCH_SUSTAINED_FRAME_COUNT = 15;
+
+// The score a deviation of exactly SLOUCH_CVA_THRESHOLD_DEGREES produces —
+// lets a caller that only ever sees the final 0-100 score (e.g. a
+// Realtime-subscribed dashboard card, which has no access to raw CVA
+// degrees) apply the same degree-based threshold without re-deriving it.
+export const SLOUCH_SCORE_THRESHOLD = scoreFromDeviation(SLOUCH_CVA_THRESHOLD_DEGREES);
+
+// True once the most recent SLOUCH_SUSTAINED_FRAME_COUNT readings are all
+// present (not null/missing) and all at or below SLOUCH_SCORE_THRESHOLD.
+// `recentScores` is expected oldest-first, most-recent-last, matching how
+// a caller would push each new reading onto a rolling buffer — only the
+// tail is inspected, so it's fine to pass a longer history than the window
+// actually needs.
+export function isSustainedSlouch(recentScores: Array<number | null>): boolean {
+  if (recentScores.length < SLOUCH_SUSTAINED_FRAME_COUNT) return false;
+  const window = recentScores.slice(-SLOUCH_SUSTAINED_FRAME_COUNT);
+  return window.every(
+    (score): score is number => score !== null && score <= SLOUCH_SCORE_THRESHOLD
   );
 }
 

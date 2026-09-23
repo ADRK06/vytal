@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { isSustainedSlouch, SLOUCH_SUSTAINED_FRAME_COUNT } from "@/lib/scoring";
 
-const SLOUCH_THRESHOLD = 50;
-// "Sustained" per the task's 15-20s window.
-const SUSTAINED_MS = 18000;
 // Gentle nudge, not nagging — nothing else fires for a few minutes after
 // one does, even if the score never recovers above threshold.
 const COOLDOWN_MS = 3 * 60 * 1000;
@@ -32,31 +30,33 @@ function fireNativeNotification(body: string): void {
   }
 }
 
-// Watches the live posture score and, once it's stayed continuously below
-// SLOUCH_THRESHOLD for SUSTAINED_MS, fires a reminder: a browser
-// Notification if permission has been granted (requested lazily, only
-// once an actual slouch is detected — never unprompted on mount), and
-// always an in-app toast too, so the nudge lands even if notifications
-// were denied or the tab isn't focused to see one.
+// Watches the live posture score and, once the CVA has read as a slouch
+// (see SLOUCH_CVA_THRESHOLD_DEGREES/SLOUCH_SCORE_THRESHOLD in lib/scoring)
+// for SLOUCH_SUSTAINED_FRAME_COUNT consecutive valid readings, fires a
+// reminder: a browser Notification if permission has been granted
+// (requested lazily, only once an actual slouch is detected — never
+// unprompted on mount), and always an in-app toast too, so the nudge lands
+// even if notifications were denied or the tab isn't focused to see one.
 export function useSlouchReminder(score: number | null) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const belowSinceRef = useRef<number | null>(null);
+  // Rolling buffer of the most recent scores (oldest first), fed straight
+  // to isSustainedSlouch — a null (missing/invalid) reading still gets
+  // pushed, so it correctly breaks a streak rather than being skipped over.
+  const recentScoresRef = useRef<Array<number | null>>([]);
   const lastFiredAtRef = useRef(0);
   const permissionRequestedRef = useRef(false);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    if (score === null || score >= SLOUCH_THRESHOLD) {
-      belowSinceRef.current = null;
-      return;
-    }
+    const recentScores = recentScoresRef.current;
+    recentScores.push(score);
+    if (recentScores.length > SLOUCH_SUSTAINED_FRAME_COUNT) recentScores.shift();
+
+    if (!isSustainedSlouch(recentScores)) return;
 
     const now = Date.now();
-    if (belowSinceRef.current === null) belowSinceRef.current = now;
-
-    const sustainedFor = now - belowSinceRef.current;
     const cooledDown = now - lastFiredAtRef.current > COOLDOWN_MS;
-    if (sustainedFor < SUSTAINED_MS || !cooledDown) return;
+    if (!cooledDown) return;
 
     lastFiredAtRef.current = now;
 

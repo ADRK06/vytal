@@ -83,6 +83,14 @@ export function SessionList({ sessions }: SessionListProps) {
                     {session.avgHydrationScore ?? "—"}
                   </div>
                 </div>
+                <div className="text-right">
+                  <div className="font-mono text-xs uppercase tracking-[0.2em] text-text-dim">
+                    Stress
+                  </div>
+                  <div className="font-mono text-lg text-stress">
+                    {session.avgStressScore ?? "—"}
+                  </div>
+                </div>
               </div>
             </GlassPanel>
           </Link>

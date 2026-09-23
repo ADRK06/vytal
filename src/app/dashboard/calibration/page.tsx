@@ -14,7 +14,7 @@ import {
 } from "@/lib/posture/mediapipe";
 import {
   captureHydrationBaseline,
-  computeNeckTorsoAngle,
+  computeCraniovertebralAngle,
   storeHydrationBaseline,
   storePostureBaseline,
 } from "@/lib/scoring";
@@ -102,10 +102,11 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
       if (cancelled) return;
 
       // Phase 1: "get ready" countdown, no capture yet. Phase 2: hold still
-      // while we sample the neck-torso angle several times a second and
-      // average all of it into the baseline — many more readings than a
-      // single instant snapshot, so one noisy frame (or a low-visibility
-      // frame, which extractPostureLandmarks already skips) can't skew it.
+      // while we sample the craniovertebral angle (CVA) several times a
+      // second and average all of it into the baseline — many more
+      // readings than a single instant snapshot, so one noisy frame (or a
+      // low-visibility frame, which extractPostureLandmarks already skips)
+      // can't skew it.
       let phase: "get-ready" | "hold" = "get-ready";
       let remaining = GET_READY_SECONDS;
       const samples: number[] = [];
@@ -127,7 +128,7 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
           return;
         }
 
-        storePostureBaseline({ neckTorsoAngle: averaged });
+        storePostureBaseline({ craniovertebralAngle: averaged });
         if (cancelled) return;
 
         // A brief confirmation of what was actually recorded, rather than
@@ -151,7 +152,7 @@ function PostureCalibrationStep({ onComplete }: { onComplete: () => void }) {
         // Live during get-ready too (so the user can already see and
         // adjust before the hold starts), but only banked into the
         // averaged baseline once actually holding.
-        const angle = computeNeckTorsoAngle(landmarks);
+        const angle = computeCraniovertebralAngle(landmarks);
         setLiveAngle(angle);
         setLiveLandmarks(landmarks);
         if (phase === "hold") samples.push(angle);

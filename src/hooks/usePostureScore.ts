@@ -8,10 +8,8 @@ import {
 } from "@/lib/posture/mediapipe";
 import {
   computeAngleDeviation,
-  computeNeckTorsoAngle,
   computeShoulderAsymmetry,
   getStoredPostureBaseline,
-  scorePosture,
   scoreWithShoulderPenalty,
 } from "@/lib/scoring";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -141,24 +139,6 @@ export function usePostureScore(sessionId: string) {
         const smoothedAsymmetry =
           asymmetryWindow.reduce((sum, value) => sum + value, 0) /
           asymmetryWindow.length;
-
-        // TEMP DEBUG — remove once the score-stuck-at-85-90 issue is diagnosed.
-        console.log("[posture debug] landmarks", {
-          leftShoulder: landmarks.leftShoulder,
-          rightShoulder: landmarks.rightShoulder,
-          leftEar: landmarks.leftEar,
-          rightEar: landmarks.rightEar,
-        });
-        console.log(
-          "[posture debug]",
-          "neckTorsoAngle:", computeNeckTorsoAngle(landmarks).toFixed(2),
-          "baseline:", baseline.neckTorsoAngle.toFixed(2),
-          "deviation:", deviation.toFixed(2),
-          "windowedAvg:", smoothedDeviation.toFixed(2),
-          "windowSize:", deviationWindow.length,
-          "shoulderAsymmetry:", asymmetry.toFixed(4),
-          "score:", scorePosture(landmarks, baseline)
-        );
 
         const nextScore = scoreWithShoulderPenalty(smoothedDeviation, smoothedAsymmetry);
         setStatus("live");

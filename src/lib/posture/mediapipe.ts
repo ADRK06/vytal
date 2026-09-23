@@ -18,7 +18,7 @@ export interface PostureLandmarks {
   // and never shows hips at all (confirmed via debug logging — hip
   // visibility sits around 0.01 on a normal laptop setup, vs. 0.99+ for
   // shoulders/ears). Extracted when visible, but nothing in the current
-  // scoring math depends on them — see computeNeckTorsoAngle in
+  // scoring math depends on them — see computeCraniovertebralAngle in
   // lib/scoring.ts.
   leftHip?: Point2D;
   rightHip?: Point2D;
